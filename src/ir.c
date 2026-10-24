@@ -16,6 +16,11 @@ void hp_page_default(hp_page *page) {
     page->margin_bottom = 4252;
 }
 
+uint32_t hp_hwp_to_px(uint32_t hwp) {
+    /* 1 HWPUNIT = 1/7200 in; at 96 dpi → /75 */
+    return (hwp + 37) / 75;
+}
+
 static char *hp_strdup(const char *s) {
     size_t n;
     char *out;
@@ -54,11 +59,62 @@ static void hp_paragraph_free(hp_paragraph *p) {
     p->run_count = 0;
 }
 
+static void hp_image_free(hp_image *img);
+
+static void hp_table_free(hp_table *t) {
+    size_t i, j;
+    if (!t) {
+        return;
+    }
+    for (i = 0; i < t->cell_count; i++) {
+        for (j = 0; j < t->cells[i].paragraph_count; j++) {
+            hp_paragraph_free(&t->cells[i].paragraphs[j]);
+        }
+        free(t->cells[i].paragraphs);
+        if (t->cells[i].image) {
+            hp_image_free(t->cells[i].image);
+            t->cells[i].image = NULL;
+        }
+    }
+    free(t->cells);
+    free(t);
+}
+
+static void hp_image_free(hp_image *img) {
+    if (!img) {
+        return;
+    }
+    free(img->binary_id);
+    free(img->data);
+    free(img);
+}
+
+static void hp_block_free(hp_block *b) {
+    if (!b) {
+        return;
+    }
+    if (b->kind == HP_BLOCK_PARAGRAPH) {
+        hp_paragraph_free(&b->paragraph);
+    } else if (b->kind == HP_BLOCK_TABLE) {
+        hp_table_free(b->table);
+        b->table = NULL;
+    } else if (b->kind == HP_BLOCK_IMAGE) {
+        hp_image_free(b->image);
+        b->image = NULL;
+    }
+}
+
 static void hp_section_free(hp_section *s) {
     size_t i;
     if (!s) {
         return;
     }
+    for (i = 0; i < s->block_count; i++) {
+        hp_block_free(&s->blocks[i]);
+    }
+    free(s->blocks);
+    s->blocks = NULL;
+    s->block_count = 0;
     for (i = 0; i < s->paragraph_count; i++) {
         hp_paragraph_free(&s->paragraphs[i]);
     }
@@ -83,12 +139,14 @@ hp_document *hp_document_new(void) {
     doc->section_count = 1;
     sec = &doc->sections[0];
     hp_page_default(&sec->page);
+    sec->column_count = 1;
     return doc;
 }
 
 hp_status hp_section_add_paragraph_text(hp_section *sec, const char *text) {
     hp_paragraph *paras;
     hp_run *runs;
+    hp_block *blocks;
     if (!sec) {
         return HP_ERR_INVALID;
     }
@@ -108,13 +166,38 @@ hp_status hp_section_add_paragraph_text(hp_section *sec, const char *text) {
         return HP_ERR_NOMEM;
     }
     runs[0].font_face = NULL;
-    runs[0].font_size_hwp = 1000; /* 10pt */
+    runs[0].font_size_hwp = 1000;
     runs[0].color_rgb = 0;
     runs[0].bold = 0;
     sec->paragraphs[sec->paragraph_count].runs = runs;
     sec->paragraphs[sec->paragraph_count].run_count = 1;
     sec->paragraphs[sec->paragraph_count].align = HP_ALIGN_LEFT;
+
+    blocks = (hp_block *)realloc(sec->blocks, (sec->block_count + 1) * sizeof(*blocks));
+    if (!blocks) {
+        return HP_ERR_NOMEM;
+    }
+    sec->blocks = blocks;
+    memset(&sec->blocks[sec->block_count], 0, sizeof(hp_block));
+    sec->blocks[sec->block_count].kind = HP_BLOCK_PARAGRAPH;
+    {
+        hp_paragraph *bp = &sec->blocks[sec->block_count].paragraph;
+        hp_run *br = (hp_run *)calloc(1, sizeof(*br));
+        if (!br) {
+            return HP_ERR_NOMEM;
+        }
+        br[0].text = hp_strdup(text ? text : "");
+        if (!br[0].text) {
+            free(br);
+            return HP_ERR_NOMEM;
+        }
+        br[0].font_size_hwp = 1000;
+        bp->runs = br;
+        bp->run_count = 1;
+        bp->align = HP_ALIGN_LEFT;
+    }
     sec->paragraph_count++;
+    sec->block_count++;
     return HP_OK;
 }
 
@@ -158,11 +241,28 @@ void hp_document_free(hp_document *doc) {
     free(doc);
 }
 
+static int para_blank(const hp_paragraph *para) {
+    size_t ri;
+    if (!para) {
+        return 1;
+    }
+    for (ri = 0; ri < para->run_count; ri++) {
+        const char *t = para->runs[ri].text ? para->runs[ri].text : "";
+        while (*t) {
+            if ((unsigned char)*t > 32) {
+                return 0;
+            }
+            t++;
+        }
+    }
+    return 1;
+}
+
 char *hp_document_plain_text(const hp_document *doc) {
     size_t cap = 64;
     size_t len = 0;
     char *buf;
-    size_t si, pi, ri;
+    size_t si, pi, ri, bi, ci;
     int first = 1;
 
     if (!doc) {
@@ -176,25 +276,97 @@ char *hp_document_plain_text(const hp_document *doc) {
 
     for (si = 0; si < doc->section_count; si++) {
         const hp_section *sec = &doc->sections[si];
-        for (pi = 0; pi < sec->paragraph_count; pi++) {
-            const hp_paragraph *para = &sec->paragraphs[pi];
-            int blank = 1;
-            for (ri = 0; ri < para->run_count; ri++) {
-                const char *t = para->runs[ri].text ? para->runs[ri].text : "";
-                const char *c = t;
-                while (*c) {
-                    if ((unsigned char)*c > 32) {
-                        blank = 0;
-                        break;
+        /* Prefer rich blocks when present */
+        if (sec->block_count > 0) {
+            for (bi = 0; bi < sec->block_count; bi++) {
+                const hp_block *bl = &sec->blocks[bi];
+                if (bl->kind == HP_BLOCK_PARAGRAPH) {
+                    const hp_paragraph *para = &bl->paragraph;
+                    if (para_blank(para)) {
+                        continue;
                     }
-                    c++;
-                }
-                if (!blank) {
-                    break;
+                    if (!first) {
+                        if (len + 2 > cap) {
+                            char *nbuf;
+                            cap *= 2;
+                            nbuf = (char *)realloc(buf, cap);
+                            if (!nbuf) {
+                                free(buf);
+                                return NULL;
+                            }
+                            buf = nbuf;
+                        }
+                        buf[len++] = '\n';
+                        buf[len] = '\0';
+                    }
+                    first = 0;
+                    for (ri = 0; ri < para->run_count; ri++) {
+                        const char *t = para->runs[ri].text ? para->runs[ri].text : "";
+                        size_t n = strlen(t);
+                        while (len + n + 1 > cap) {
+                            char *nbuf;
+                            cap *= 2;
+                            nbuf = (char *)realloc(buf, cap);
+                            if (!nbuf) {
+                                free(buf);
+                                return NULL;
+                            }
+                            buf = nbuf;
+                        }
+                        memcpy(buf + len, t, n);
+                        len += n;
+                        buf[len] = '\0';
+                    }
+                } else if (bl->kind == HP_BLOCK_TABLE && bl->table) {
+                    for (ci = 0; ci < bl->table->cell_count; ci++) {
+                        const hp_table_cell *cell = &bl->table->cells[ci];
+                        for (pi = 0; pi < cell->paragraph_count; pi++) {
+                            const hp_paragraph *para = &cell->paragraphs[pi];
+                            if (para_blank(para)) {
+                                continue;
+                            }
+                            if (!first) {
+                                if (len + 2 > cap) {
+                                    char *nbuf;
+                                    cap *= 2;
+                                    nbuf = (char *)realloc(buf, cap);
+                                    if (!nbuf) {
+                                        free(buf);
+                                        return NULL;
+                                    }
+                                    buf = nbuf;
+                                }
+                                buf[len++] = '\n';
+                                buf[len] = '\0';
+                            }
+                            first = 0;
+                            for (ri = 0; ri < para->run_count; ri++) {
+                                const char *t = para->runs[ri].text ? para->runs[ri].text : "";
+                                size_t n = strlen(t);
+                                while (len + n + 1 > cap) {
+                                    char *nbuf;
+                                    cap *= 2;
+                                    nbuf = (char *)realloc(buf, cap);
+                                    if (!nbuf) {
+                                        free(buf);
+                                        return NULL;
+                                    }
+                                    buf = nbuf;
+                                }
+                                memcpy(buf + len, t, n);
+                                len += n;
+                                buf[len] = '\0';
+                            }
+                        }
+                    }
                 }
             }
-            if (blank) {
-                continue; /* layout spacers omitted from plain text */
+            continue;
+        }
+        for (pi = 0; pi < sec->paragraph_count; pi++) {
+            const hp_paragraph *para = &sec->paragraphs[pi];
+            if (para_blank(para)) {
+                continue;
             }
             if (!first) {
                 if (len + 2 > cap) {

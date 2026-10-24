@@ -57,7 +57,7 @@ done
 
 LIBS_CLI=(-L"$WIN_PREFIX/lib" -lzip -lz -Wl,-Bstatic -lwinpthread -Wl,-Bdynamic)
 LIBS_GUI=(-L"$WIN_PREFIX/lib" -lzip -lz -Wl,-Bstatic -lwinpthread -Wl,-Bdynamic \
-  -lcomdlg32 -luser32 -lgdi32 -lshell32)
+  -lcomdlg32 -luser32 -lgdi32 -lshell32 -lole32 -luuid -lwindowscodecs)
 
 # Console CLI
 "$WIN_CC" -o "$OUT_DIR/hp.exe" \
@@ -109,7 +109,7 @@ cat > "$OUT_DIR/사용법.txt" << 'EOF'
 
 ★ 창 프로그램 (권장)
   HangulPad.exe  더블클릭 → HWPX 엔진이 문서를 읽어
-  글꼴·크기·정렬을 반영해 PDF처럼 페이지로 표시합니다.
+  글꼴·크기·정렬·표·이미지을 반영해 PDF처럼 페이지로 표시합니다.
   (페이지 그림 파일이 아닙니다)
 
   이전/다음, 방향키, PageUp/Down, 스페이스, 마우스 휠로 이동
