@@ -35,10 +35,17 @@ Dependencies: C11 compiler, `libzip` (`libzip-dev` on Debian/Ubuntu).
 
 ```bash
 make          # builds build/hp and runs tests
-make test
-make cli
-./build/hp --help 2>/dev/null || ./build/hp
+make cli      # debug binary → build/hp
+make release  # stripped executable → dist/hp
+make install  # install to /usr/local/bin/hp (PREFIX=... optional)
 ```
+
+실행 파일:
+
+| 경로 | 설명 |
+|------|------|
+| `build/hp` | 개발용 바이너리 |
+| `dist/hp` | `make release` 후 배포용 (strip) |
 
 ### HWPX roundtrip
 
