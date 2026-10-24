@@ -49,15 +49,16 @@ make install  # install to /usr/local/bin/hp (PREFIX=... optional)
 | `dist/hp.exe` | Windows x64 정적 빌드 (`make release-windows`) |
 | `dist/hp-windows-x86_64-portable.zip` | **DLL 포함 포터블 패키지** (권장) |
 
-### Windows 포터블 다운로드
+### Windows 포터블 다운로드 (GUI 창)
 
-- GitHub Release: https://github.com/yanghanjin-dev/hangulpad/releases/download/v0.1.0-windows/hp-windows-x86_64-portable.zip  
-- ZIP을 풀면 `hp.exe` + `zlib1.dll` + `libzip.dll` (+ MinGW 런타임 DLL)이 같은 폴더에 있습니다.  
-- **같은 폴더에서** `hp.exe`를 실행하세요.
+- **다운로드:** https://github.com/yanghanjin-dev/hangulpad/releases/download/v0.1.0-windows/hp-windows-x86_64-portable.zip  
+- ZIP을 풀고 **`HangulPad.exe`** 를 실행하면 윈도우 창이 열리고 내용을 보고 편집할 수 있습니다.  
+- 메뉴: 파일 → 열기 / 저장 (HWPX). `HangulPad.exe`와 DLL은 **같은 폴더**에 두세요.  
+- CLI: 같은 폴더의 `hp.exe`
 
 ```bat
+HangulPad.exe
 hp.exe new demo.hwpx --text "한글패드"
-hp.exe open demo.hwpx
 ```
 
 Windows 정적/크로스 빌드 (개발용):
