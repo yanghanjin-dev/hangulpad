@@ -44,8 +44,19 @@ make install  # install to /usr/local/bin/hp (PREFIX=... optional)
 
 | 경로 | 설명 |
 |------|------|
-| `build/hp` | 개발용 바이너리 |
-| `dist/hp` | `make release` 후 배포용 (strip) |
+| `build/hp` | Linux 개발용 |
+| `dist/hp` | Linux 배포용 (`make release`) |
+| `dist/hp.exe` | Windows x64 콘솔 (`make release-windows`) |
+
+Windows 빌드 (크로스 컴파일):
+
+```bash
+sudo apt-get install -y gcc-mingw-w64-x86-64 cmake curl
+./scripts/build-win-deps.sh   # static zlib + libzip → /tmp/win-prefix
+make release-windows          # → dist/hp.exe
+```
+
+`hp.exe`는 추가 DLL 없이 동작하는 정적 링크 콘솔 앱입니다.
 
 ### HWPX roundtrip
 

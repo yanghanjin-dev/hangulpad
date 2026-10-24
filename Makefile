@@ -10,12 +10,12 @@ VERSION ?= 0.1.0
 LIB_SRCS := src/common.c src/ir.c src/hwpx_read.c src/hwpx_write.c src/hwp.c
 LIB_OBJS := $(LIB_SRCS:src/%.c=build/%.o)
 
-.PHONY: all clean test cli check release install uninstall dist
+.PHONY: all clean test cli check release release-windows install uninstall dist
 
 all: cli test
 
 build:
-	mkdir -p build
+	mkdir -p build build/win
 
 dist:
 	mkdir -p dist
@@ -41,6 +41,29 @@ dist/hp: build/hp | dist
 	@echo "executable: $$(pwd)/dist/hp"
 	@file dist/hp
 	@ls -la dist/hp
+
+# Cross-compile Windows x86_64 console EXE (needs mingw + deps in WIN_PREFIX).
+# Default: /tmp/win-prefix with static libzip + zlib (see scripts/build-win-deps.sh).
+WIN_CC ?= x86_64-w64-mingw32-gcc
+WIN_PREFIX ?= /tmp/win-prefix
+WIN_CFLAGS ?= -std=c11 -Wall -Wextra -O2 -Iinclude -I$(WIN_PREFIX)/include
+WIN_LIBS ?= $(WIN_PREFIX)/lib/libzip.a $(WIN_PREFIX)/lib/libz.a -lbcrypt
+
+release-windows: dist/hp.exe
+dist/hp.exe: $(LIB_SRCS) src/cli.c | dist build
+	@command -v $(WIN_CC) >/dev/null || { echo "missing $(WIN_CC); install gcc-mingw-w64-x86-64"; exit 1; }
+	@test -f $(WIN_PREFIX)/lib/libzip.a || { echo "missing $(WIN_PREFIX)/lib/libzip.a — run scripts/build-win-deps.sh first"; exit 1; }
+	$(WIN_CC) $(WIN_CFLAGS) -c src/common.c -o build/win/common.o
+	$(WIN_CC) $(WIN_CFLAGS) -c src/ir.c -o build/win/ir.o
+	$(WIN_CC) $(WIN_CFLAGS) -c src/hwpx_read.c -o build/win/hwpx_read.o
+	$(WIN_CC) $(WIN_CFLAGS) -c src/hwpx_write.c -o build/win/hwpx_write.o
+	$(WIN_CC) $(WIN_CFLAGS) -c src/hwp.c -o build/win/hwp.o
+	$(WIN_CC) $(WIN_CFLAGS) -c src/cli.c -o build/win/cli.o
+	$(WIN_CC) -static -o dist/hp.exe build/win/common.o build/win/ir.o build/win/hwpx_read.o build/win/hwpx_write.o build/win/hwp.o build/win/cli.o $(WIN_LIBS)
+	x86_64-w64-mingw32-strip dist/hp.exe
+	@echo "executable: $$(pwd)/dist/hp.exe"
+	@file dist/hp.exe
+	@ls -la dist/hp.exe
 
 install: dist/hp
 	install -d $(DESTDIR)$(PREFIX)/bin
