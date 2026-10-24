@@ -700,6 +700,75 @@ static hp_status parse_text_paragraph(const char *p_open, const char *p_end, con
     return HP_OK;
 }
 
+static hp_text_wrap parse_wrap(const char *s) {
+    if (!s) {
+        return HP_WRAP_TOP_AND_BOTTOM;
+    }
+    if (strcmp(s, "SQUARE") == 0) {
+        return HP_WRAP_SQUARE;
+    }
+    if (strcmp(s, "BEHIND_TEXT") == 0) {
+        return HP_WRAP_BEHIND;
+    }
+    if (strcmp(s, "IN_FRONT_OF_TEXT") == 0) {
+        return HP_WRAP_IN_FRONT;
+    }
+    return HP_WRAP_TOP_AND_BOTTOM;
+}
+
+static uint32_t attr_u32(const char *tag_open, const char *name, uint32_t def) {
+    char key[64];
+    const char *p;
+    const char *gt;
+    size_t n = strlen(name);
+    if (n + 3 >= sizeof(key)) {
+        return def;
+    }
+    gt = find_close_gt(tag_open);
+    if (!gt) {
+        return def;
+    }
+    snprintf(key, sizeof(key), "%s=\"", name);
+    p = strstr(tag_open, key);
+    if (!p || p > gt) {
+        return def;
+    }
+    return (uint32_t)strtoul(p + n + 2, NULL, 10);
+}
+
+static void parse_float_pos(const char *elem_open, const char *elem_end, const char *wrap_attr_src,
+                            hp_float_pos *pos, int *has_pos) {
+    const char *p;
+    char wrap[32];
+    char vrel[32];
+    char hrel[32];
+    memset(pos, 0, sizeof(*pos));
+    pos->treat_as_char = 1;
+    pos->wrap = HP_WRAP_TOP_AND_BOTTOM;
+    pos->vert_rel_para = 1;
+    pos->horz_rel_para = 1;
+    *has_pos = 0;
+    if (wrap_attr_src && attr_str(wrap_attr_src, "textWrap", wrap, sizeof(wrap))) {
+        pos->wrap = parse_wrap(wrap);
+        *has_pos = 1;
+    }
+    p = find_tag_open(elem_open, "pos");
+    if (!p || p >= elem_end) {
+        return;
+    }
+    *has_pos = 1;
+    pos->treat_as_char = attr_int(p, "treatAsChar", 1);
+    /* Offsets are HWPUNIT bit patterns — interpret as signed int32. */
+    pos->vert_offset_hwp = hp_hwp_signed(attr_u32(p, "vertOffset", 0));
+    pos->horz_offset_hwp = hp_hwp_signed(attr_u32(p, "horzOffset", 0));
+    if (attr_str(p, "vertRelTo", vrel, sizeof(vrel))) {
+        pos->vert_rel_para = (strcmp(vrel, "PARA") == 0);
+    }
+    if (attr_str(p, "horzRelTo", hrel, sizeof(hrel))) {
+        pos->horz_rel_para = (strcmp(hrel, "PARA") == 0);
+    }
+}
+
 static hp_image *parse_pic(const char *pic_open, const hp_style_tables *styles) {
     const char *end = find_element_end(pic_open, "pic");
     const char *img;
@@ -733,6 +802,7 @@ static hp_image *parse_pic(const char *pic_open, const hp_style_tables *styles) 
             image->height_hwp = (uint32_t)attr_int(org, "height", 0);
         }
     }
+    parse_float_pos(pic_open, end, pic_open, &image->pos, &image->has_pos);
     bin = find_bin(styles, bin_id);
     if (bin && bin->data && bin->len) {
         image->data = (unsigned char *)malloc(bin->len);
@@ -744,39 +814,266 @@ static hp_image *parse_pic(const char *pic_open, const hp_style_tables *styles) 
     return image;
 }
 
-static hp_status parse_cell_paragraphs(const char *tc_open, const char *tc_end, const hp_style_tables *styles,
-                                       hp_table_cell *cell) {
-    const char *p = tc_open;
-    /* Prefer first picture in the cell (logos in header tables, etc.). */
-    {
-        const char *pic = find_tag_open(tc_open, "pic");
-        if (pic && pic < tc_end && !cell->image) {
-            cell->image = parse_pic(pic, styles);
+static hp_equation *parse_equation(const char *eq_open) {
+    const char *end = find_element_end(eq_open, "equation");
+    const char *script;
+    const char *gt;
+    hp_equation *eq;
+    if (!end) {
+        /* try alternate tag names */
+        end = find_element_end(eq_open, "script");
+    }
+    if (!end) {
+        return NULL;
+    }
+    eq = (hp_equation *)calloc(1, sizeof(*eq));
+    if (!eq) {
+        return NULL;
+    }
+    eq->font_size_hwp = 1200;
+    script = find_tag_open(eq_open, "script");
+    if (script && script < end) {
+        gt = find_close_gt(script);
+        if (gt && gt[-1] != '/') {
+            const char *close = find_element_end(script, "script");
+            const char *c = close ? close : end;
+            while (c > gt && !(c[0] == '<' && c[1] == '/')) {
+                c--;
+            }
+            eq->script = clean_text_xml(gt + 1, (size_t)(c - (gt + 1)));
         }
     }
-    while (p < tc_end && (p = find_tag_open(p, "p")) != NULL && p < tc_end) {
-        const char *pend = find_element_end(p, "p");
-        hp_paragraph para;
-        hp_paragraph *arr;
-        if (!pend || pend > tc_end) {
+    if (!eq->script) {
+        /* fallback: any text inside */
+        gt = find_close_gt(eq_open);
+        if (gt) {
+            const char *c = end;
+            while (c > gt && !(c[0] == '<' && c[1] == '/')) {
+                c--;
+            }
+            eq->script = clean_text_xml(gt + 1, (size_t)(c - (gt + 1)));
+        }
+    }
+    if (!eq->script || !eq->script[0]) {
+        free(eq->script);
+        eq->script = hp_strdup("[수식]");
+    }
+    return eq;
+}
+
+static hp_container *parse_container(const char *c_open, const hp_style_tables *styles) {
+    const char *end = find_element_end(c_open, "container");
+    const char *sz;
+    const char *pic;
+    hp_container *c;
+    if (!end) {
+        return NULL;
+    }
+    c = (hp_container *)calloc(1, sizeof(*c));
+    if (!c) {
+        return NULL;
+    }
+    sz = find_tag_open(c_open, "sz");
+    if (sz && sz < end) {
+        c->width_hwp = (uint32_t)attr_int(sz, "width", 0);
+        c->height_hwp = (uint32_t)attr_int(sz, "height", 0);
+    }
+    parse_float_pos(c_open, end, c_open, &c->pos, &c->has_pos);
+    pic = c_open;
+    while (pic < end && (pic = find_tag_open(pic, "pic")) != NULL && pic < end) {
+        hp_image *im = parse_pic(pic, styles);
+        const char *pend = find_element_end(pic, "pic");
+        if (im) {
+            hp_image **arr =
+                (hp_image **)realloc(c->images, (c->image_count + 1) * sizeof(hp_image *));
+            if (arr) {
+                c->images = arr;
+                c->images[c->image_count++] = im;
+            } else {
+                free(im->binary_id);
+                free(im->data);
+                free(im);
+            }
+        }
+        if (!pend) {
             break;
         }
-        if (parse_text_paragraph(p, pend, styles, &para) != HP_OK) {
-            return HP_ERR_NOMEM;
+        pic = pend;
+    }
+    if (c->image_count == 0) {
+        free(c);
+        return NULL;
+    }
+    return c;
+}
+
+static hp_table *parse_table(const char *tbl_open, const hp_style_tables *styles);
+
+static int cell_append_nested(hp_table_cell *cell, hp_table *nested) {
+    hp_table **arr;
+    if (!nested) {
+        return 0;
+    }
+    arr = (hp_table **)realloc(cell->nested_tables,
+                               (cell->nested_table_count + 1) * sizeof(hp_table *));
+    if (!arr) {
+        return -1;
+    }
+    cell->nested_tables = arr;
+    cell->nested_tables[cell->nested_table_count++] = nested;
+    return 0;
+}
+
+/* OWPML nests objects as tc/subList/p/run/{tbl,pic,container,equation}. */
+static hp_status cell_harvest_objects(const char *from, const char *until, const hp_style_tables *styles,
+                                      hp_table_cell *cell) {
+    const char *inner = from;
+    while (inner && inner < until) {
+        const char *itbl = find_tag_open(inner, "tbl");
+        const char *ipic = find_tag_open(inner, "pic");
+        const char *icont = find_tag_open(inner, "container");
+        const char *ieq = find_tag_open(inner, "equation");
+        const char *inext = NULL;
+        int ik = 0; /* 1 tbl 2 pic 3 container 4 equation */
+        if (itbl && itbl < until) {
+            inext = itbl;
+            ik = 1;
         }
-        arr = (hp_paragraph *)realloc(cell->paragraphs, (cell->paragraph_count + 1) * sizeof(*arr));
-        if (!arr) {
-            size_t i;
-            for (i = 0; i < para.run_count; i++) {
-                free(para.runs[i].text);
-                free(para.runs[i].font_face);
+        if (ipic && ipic < until && (!inext || ipic < inext)) {
+            inext = ipic;
+            ik = 2;
+        }
+        if (icont && icont < until && (!inext || icont < inext)) {
+            inext = icont;
+            ik = 3;
+        }
+        if (ieq && ieq < until && (!inext || ieq < inext)) {
+            inext = ieq;
+            ik = 4;
+        }
+        if (!inext) {
+            break;
+        }
+        if (ik == 1) {
+            hp_table *nested = parse_table(inext, styles);
+            const char *tend = find_element_end(inext, "tbl");
+            if (cell_append_nested(cell, nested) != 0) {
+                return HP_ERR_NOMEM;
             }
-            free(para.runs);
-            return HP_ERR_NOMEM;
+            inner = tend ? tend : inext + 4;
+        } else if (ik == 2) {
+            /* Skip pics that belong to a container we already/will parse as a unit */
+            const char *pend = find_element_end(inext, "pic");
+            if (!cell->container && !cell->image) {
+                cell->image = parse_pic(inext, styles);
+            }
+            inner = pend ? pend : inext + 4;
+        } else if (ik == 3) {
+            const char *cend = find_element_end(inext, "container");
+            if (!cell->container) {
+                cell->container = parse_container(inext, styles);
+            }
+            /* Advance past whole container so child pics are not re-harvested */
+            inner = cend ? cend : inext + 4;
+        } else {
+            const char *eend = find_element_end(inext, "equation");
+            if (!cell->equation) {
+                cell->equation = parse_equation(inext);
+            }
+            inner = eend ? eend : inext + 4;
         }
-        cell->paragraphs = arr;
-        cell->paragraphs[cell->paragraph_count++] = para;
-        p = pend;
+    }
+    return HP_OK;
+}
+
+static hp_status parse_cell_content(const char *tc_open, const char *tc_end, const hp_style_tables *styles,
+                                    hp_table_cell *cell) {
+    const char *scan = find_close_gt(tc_open);
+    if (scan) {
+        scan++;
+    }
+    /* Walk in document order. Nested tbl/pic usually sit inside p/run, so p wins the
+     * earliest-tag race — harvest objects from inside each paragraph. */
+    while (scan && scan < tc_end) {
+        const char *tbl = find_tag_open(scan, "tbl");
+        const char *pic = find_tag_open(scan, "pic");
+        const char *p = find_tag_open(scan, "p");
+        const char *next = NULL;
+        int kind = 0; /* 1 tbl 2 pic 3 p */
+
+        if (tbl && tbl < tc_end) {
+            next = tbl;
+            kind = 1;
+        }
+        if (pic && pic < tc_end && (!next || pic < next)) {
+            next = pic;
+            kind = 2;
+        }
+        if (p && p < tc_end && (!next || p < next)) {
+            next = p;
+            kind = 3;
+        }
+        if (!next) {
+            break;
+        }
+
+        if (kind == 1) {
+            hp_table *nested = parse_table(next, styles);
+            const char *tend = find_element_end(next, "tbl");
+            if (cell_append_nested(cell, nested) != 0) {
+                return HP_ERR_NOMEM;
+            }
+            scan = tend ? tend : next + 4;
+            continue;
+        }
+        if (kind == 2) {
+            if (!cell->image) {
+                cell->image = parse_pic(next, styles);
+            }
+            {
+                const char *pend = find_element_end(next, "pic");
+                scan = pend ? pend : next + 4;
+            }
+            continue;
+        }
+        /* paragraph: pull nested tbl/pic out of p/run, then keep any text runs */
+        {
+            const char *pend = find_element_end(next, "p");
+            hp_paragraph para;
+            hp_paragraph *arr;
+            if (!pend || pend > tc_end) {
+                break;
+            }
+            if (cell_harvest_objects(next, pend, styles, cell) != HP_OK) {
+                return HP_ERR_NOMEM;
+            }
+            if (parse_text_paragraph(next, pend, styles, &para) != HP_OK) {
+                return HP_ERR_NOMEM;
+            }
+            if (para.run_count > 0) {
+                arr = (hp_paragraph *)realloc(cell->paragraphs,
+                                              (cell->paragraph_count + 1) * sizeof(*arr));
+                if (!arr) {
+                    size_t i;
+                    for (i = 0; i < para.run_count; i++) {
+                        free(para.runs[i].text);
+                        free(para.runs[i].font_face);
+                    }
+                    free(para.runs);
+                    return HP_ERR_NOMEM;
+                }
+                cell->paragraphs = arr;
+                cell->paragraphs[cell->paragraph_count++] = para;
+            } else {
+                size_t i;
+                for (i = 0; i < para.run_count; i++) {
+                    free(para.runs[i].text);
+                    free(para.runs[i].font_face);
+                }
+                free(para.runs);
+            }
+            scan = pend;
+        }
     }
     return HP_OK;
 }
@@ -800,6 +1097,7 @@ static hp_table *parse_table(const char *tbl_open, const hp_style_tables *styles
         table->width_hwp = (uint32_t)attr_int(sz, "width", 0);
         table->height_hwp = (uint32_t)attr_int(sz, "height", 0);
     }
+    parse_float_pos(tbl_open, end, tbl_open, &table->pos, &table->has_pos);
     tr = tbl_open;
     while (tr < end && (tr = find_tag_open(tr, "tr")) != NULL && tr < end) {
         const char *tr_end = find_element_end(tr, "tr");
@@ -845,9 +1143,7 @@ static hp_table *parse_table(const char *tbl_open, const hp_style_tables *styles
                 cell.fill_rgb = styles->fill_rgb[fill_id];
                 cell.has_fill = 1;
             }
-            if (parse_cell_paragraphs(tc, tc_end, styles, &cell) != HP_OK) {
-                /* continue with what we have */
-            }
+            parse_cell_content(tc, tc_end, styles, &cell);
             arr = (hp_table_cell *)realloc(table->cells, (table->cell_count + 1) * sizeof(*arr));
             if (!arr) {
                 break;
@@ -926,6 +1222,38 @@ static hp_status parse_section_xml(const char *xml, hp_section *sec, const hp_st
                 }
             }
             p = find_element_end(p, "pic");
+            if (!p) {
+                break;
+            }
+            continue;
+        } else if (tbl_depth == 0 && tag_is(p, "container") && p[1] != '/') {
+            hp_container *c = parse_container(p, styles);
+            if (c) {
+                hp_block blk;
+                memset(&blk, 0, sizeof(blk));
+                blk.kind = HP_BLOCK_CONTAINER;
+                blk.container = c;
+                if (append_block(sec, &blk) != HP_OK) {
+                    return HP_ERR_NOMEM;
+                }
+            }
+            p = find_element_end(p, "container");
+            if (!p) {
+                break;
+            }
+            continue;
+        } else if (tbl_depth == 0 && tag_is(p, "equation") && p[1] != '/') {
+            hp_equation *eq = parse_equation(p);
+            if (eq) {
+                hp_block blk;
+                memset(&blk, 0, sizeof(blk));
+                blk.kind = HP_BLOCK_EQUATION;
+                blk.equation = eq;
+                if (append_block(sec, &blk) != HP_OK) {
+                    return HP_ERR_NOMEM;
+                }
+            }
+            p = find_element_end(p, "equation");
             if (!p) {
                 break;
             }
@@ -1009,6 +1337,60 @@ static hp_status parse_section_xml(const char *xml, hp_section *sec, const hp_st
                             memset(&blk, 0, sizeof(blk));
                             blk.kind = HP_BLOCK_IMAGE;
                             blk.image = image;
+                            append_block(sec, &blk);
+                            emitted = 1;
+                        }
+                    }
+                    scan = run_end;
+                    continue;
+                }
+                obj = find_tag_open(run, "container");
+                if (obj && obj < run_end) {
+                    if (pending.run_count > 0) {
+                        hp_block blk;
+                        memset(&blk, 0, sizeof(blk));
+                        blk.kind = HP_BLOCK_PARAGRAPH;
+                        blk.paragraph = pending;
+                        append_flat_para(sec, &pending);
+                        append_block(sec, &blk);
+                        memset(&pending, 0, sizeof(pending));
+                        pending.align = align;
+                        emitted = 1;
+                    }
+                    {
+                        hp_container *c = parse_container(obj, styles);
+                        if (c) {
+                            hp_block blk;
+                            memset(&blk, 0, sizeof(blk));
+                            blk.kind = HP_BLOCK_CONTAINER;
+                            blk.container = c;
+                            append_block(sec, &blk);
+                            emitted = 1;
+                        }
+                    }
+                    scan = run_end;
+                    continue;
+                }
+                obj = find_tag_open(run, "equation");
+                if (obj && obj < run_end) {
+                    if (pending.run_count > 0) {
+                        hp_block blk;
+                        memset(&blk, 0, sizeof(blk));
+                        blk.kind = HP_BLOCK_PARAGRAPH;
+                        blk.paragraph = pending;
+                        append_flat_para(sec, &pending);
+                        append_block(sec, &blk);
+                        memset(&pending, 0, sizeof(pending));
+                        pending.align = align;
+                        emitted = 1;
+                    }
+                    {
+                        hp_equation *eq = parse_equation(obj);
+                        if (eq) {
+                            hp_block blk;
+                            memset(&blk, 0, sizeof(blk));
+                            blk.kind = HP_BLOCK_EQUATION;
+                            blk.equation = eq;
                             append_block(sec, &blk);
                             emitted = 1;
                         }

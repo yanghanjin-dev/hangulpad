@@ -15,7 +15,7 @@ A lightweight Korean word processor (WordPad-simple). **Engine first:** HWPX rea
 | HWPX read/write | Minimal valid package + plain-text roundtrip |
 | HWP 5.x | **Read stub** (CFB detect only) |
 | CLI (`build/hp`) | `open` / `new` / `save` / `roundtrip` / `probe` |
-| Desktop UI (Windows) | `HangulPad.exe` HWPX engine layout (fonts/sizes) |
+| Desktop UI (Windows) | `HangulPad.exe` engine layout (fonts, tables/nested, images, floats, containers, equations) |
 | Full HWP record parse / HWP write | Deferred |
 
 Default save format: **HWPX**.
@@ -52,7 +52,8 @@ make install  # install to /usr/local/bin/hp (PREFIX=... optional)
 ### Windows 포터블 다운로드 (HWPX 엔진 레이아웃)
 
 - **다운로드:** https://github.com/yanghanjin-dev/hangulpad/releases/download/v0.1.0-windows/hp-windows-x86_64-portable.zip  
-- ZIP을 풀고 **`HangulPad.exe`** 실행 → HWPX를 **엔진으로 읽어** 글꼴·크기·정렬을 반영한 페이지 보기로 표시합니다 (그림 파일 슬라이드가 아님).  
+- ZIP을 풀고 **`HangulPad.exe`** 실행 → HWPX를 **엔진으로 읽어** 글꼴·크기·표(중첩)·이미지·떠있는 개체·컨테이너·수식을 반영한 페이지 보기로 표시합니다 (그림 파일 슬라이드가 아님).  
+- `documents/corpus/` 에 규제합리화·윤리·식약처 샘플 HWPX가 있습니다.  
 - 이전/다음, 방향키, PageUp/Down, 스페이스, 마우스 휠로 넘깁니다.  
 - `HangulPad.exe`와 DLL, `documents/` 를 함께 두세요.  
 - CLI: 같은 폴더의 `hp.exe`

@@ -21,6 +21,10 @@ uint32_t hp_hwp_to_px(uint32_t hwp) {
     return (hwp + 37) / 75;
 }
 
+int32_t hp_hwp_signed(uint32_t raw) {
+    return (int32_t)raw;
+}
+
 static char *hp_strdup(const char *s) {
     size_t n;
     char *out;
@@ -60,9 +64,39 @@ static void hp_paragraph_free(hp_paragraph *p) {
 }
 
 static void hp_image_free(hp_image *img);
+static void hp_table_free(hp_table *t);
+
+static void hp_image_free(hp_image *img) {
+    if (!img) {
+        return;
+    }
+    free(img->binary_id);
+    free(img->data);
+    free(img);
+}
+
+static void hp_equation_free(hp_equation *eq) {
+    if (!eq) {
+        return;
+    }
+    free(eq->script);
+    free(eq);
+}
+
+static void hp_container_free(hp_container *c) {
+    size_t i;
+    if (!c) {
+        return;
+    }
+    for (i = 0; i < c->image_count; i++) {
+        hp_image_free(c->images[i]);
+    }
+    free(c->images);
+    free(c);
+}
 
 static void hp_table_free(hp_table *t) {
-    size_t i, j;
+    size_t i, j, n;
     if (!t) {
         return;
     }
@@ -75,18 +109,21 @@ static void hp_table_free(hp_table *t) {
             hp_image_free(t->cells[i].image);
             t->cells[i].image = NULL;
         }
+        for (n = 0; n < t->cells[i].nested_table_count; n++) {
+            hp_table_free(t->cells[i].nested_tables[n]);
+        }
+        free(t->cells[i].nested_tables);
+        if (t->cells[i].container) {
+            hp_container_free(t->cells[i].container);
+            t->cells[i].container = NULL;
+        }
+        if (t->cells[i].equation) {
+            hp_equation_free(t->cells[i].equation);
+            t->cells[i].equation = NULL;
+        }
     }
     free(t->cells);
     free(t);
-}
-
-static void hp_image_free(hp_image *img) {
-    if (!img) {
-        return;
-    }
-    free(img->binary_id);
-    free(img->data);
-    free(img);
 }
 
 static void hp_block_free(hp_block *b) {
@@ -101,6 +138,12 @@ static void hp_block_free(hp_block *b) {
     } else if (b->kind == HP_BLOCK_IMAGE) {
         hp_image_free(b->image);
         b->image = NULL;
+    } else if (b->kind == HP_BLOCK_EQUATION) {
+        hp_equation_free(b->equation);
+        b->equation = NULL;
+    } else if (b->kind == HP_BLOCK_CONTAINER) {
+        hp_container_free(b->container);
+        b->container = NULL;
     }
 }
 

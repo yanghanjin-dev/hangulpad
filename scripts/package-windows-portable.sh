@@ -104,19 +104,30 @@ else
   fi
 fi
 
+# Corpus HWPX (nested tables / floats / containers) for fidelity checks
+mkdir -p "$OUT_DIR/documents/corpus"
+if [[ -d "$ROOT/sample/corpus" ]]; then
+  shopt -s nullglob
+  for f in "$ROOT/sample/corpus"/*.hwpx; do
+    cp -f "$f" "$OUT_DIR/documents/corpus/"
+  done
+  shopt -u nullglob
+fi
+
 cat > "$OUT_DIR/사용법.txt" << 'EOF'
 한글패드 Windows 포터블 패키지
 
 ★ 창 프로그램 (권장)
   HangulPad.exe  더블클릭 → HWPX 엔진이 문서를 읽어
-  글꼴·크기·정렬·표·이미지을 반영해 PDF처럼 페이지로 표시합니다.
-  (페이지 그림 파일이 아닙니다)
+  글꼴·크기·정렬·표(중첩)·이미지·떠있는 개체·컨테이너·수식을
+  반영해 PDF처럼 페이지로 표시합니다. (페이지 그림 파일이 아닙니다)
 
   이전/다음, 방향키, PageUp/Down, 스페이스, 마우스 휠로 이동
   메뉴: 파일 → 샘플 문서 열기 / HWPX 열기
 
 ★ 폴더 구조
   documents\공공부문-인공지능-윤리기준.hwpx
+  documents\corpus\  ← 중첩 표·떠있는 개체 비교용 HWPX
 
 ★ 콘솔 CLI
   hp.exe new demo.hwpx --text "한글패드"
@@ -128,9 +139,9 @@ EOF
 cat > "$OUT_DIR/README.txt" << 'EOF'
 HangulPad Windows x64 portable — HWPX engine layout viewer
 
-Run HangulPad.exe: opens the sample HWPX and renders paragraphs with
-font face/size/alignment from the document (not pre-rendered JPEGs).
-Keep all DLLs next to the EXE files. Sample: documents\*.hwpx
+Run HangulPad.exe: opens HWPX via the engine (fonts, tables including
+nested, images, floats, containers, equations). Not JPEG page slides.
+Keep all DLLs next to the EXE files. Samples: documents\ and documents\corpus\
 CLI: hp.exe
 EOF
 

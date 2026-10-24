@@ -1,6 +1,6 @@
 /*
  * HangulPad Windows GUI — HWPX engine layout viewer.
- * Renders paragraphs (font/size/align), tables, and images from the IR.
+ * Renders paragraphs, tables (incl. nested), images, floats, containers, equations.
  */
 #ifndef UNICODE
 #define UNICODE
@@ -133,7 +133,7 @@ static HFONT make_font(HDC hdc, const hp_run *run) {
 static void update_status(void) {
     wchar_t buf[200];
     if (g_doc && g_page_count > 0) {
-        swprintf(buf, 200, L"페이지 %d / %d  —  엔진 렌더 (글꼴·표·이미지)", g_page_index + 1,
+        swprintf(buf, 200, L"페이지 %d / %d  —  엔진 렌더 (표·이미지·수식·떠있는개체)", g_page_index + 1,
                  g_page_count);
     } else {
         wcscpy(buf, L"파일 → 열기 또는 샘플 문서 열기");
@@ -337,6 +337,7 @@ done:
 
 static int measure_image_height(const hp_image *img, int content_w) {
     int w, h;
+    int extra = 0;
     if (!img) {
         return 8;
     }
@@ -351,6 +352,37 @@ static int measure_image_height(const hp_image *img, int content_w) {
     if (w > content_w && w > 0) {
         h = h * content_w / w;
         w = content_w;
+    }
+    if (img->has_pos && !img->pos.treat_as_char) {
+        int vo = (int)hp_hwp_to_px((uint32_t)(img->pos.vert_offset_hwp < 0 ? 0 : img->pos.vert_offset_hwp));
+        if (img->pos.vert_offset_hwp > 0) {
+            extra += vo;
+        }
+    }
+    return h + 8 + extra;
+}
+
+static int measure_equation_height(const hp_equation *eq) {
+    (void)eq;
+    return 28;
+}
+
+static int measure_container_height(const hp_container *c, int content_w) {
+    size_t i;
+    int h = 0;
+    int declared;
+    if (!c) {
+        return 8;
+    }
+    declared = (int)hp_hwp_to_px(c->height_hwp);
+    for (i = 0; i < c->image_count; i++) {
+        int ih = measure_image_height(c->images[i], content_w);
+        if (ih > h) {
+            h = ih;
+        }
+    }
+    if (declared > h) {
+        h = declared;
     }
     return h + 8;
 }
@@ -374,7 +406,7 @@ static int measure_table_height(HDC hdc, const hp_table *t, int content_w) {
         int cw = c->width_hwp ? (int)hp_hwp_to_px(c->width_hwp) : content_w / (t->col_count ? t->col_count : 1);
         int ch = c->height_hwp ? (int)hp_hwp_to_px(c->height_hwp) : 0;
         int text_h = 0;
-        size_t p;
+        size_t p, n;
         if (c->row < 0 || c->row >= rows) {
             continue;
         }
@@ -384,8 +416,18 @@ static int measure_table_height(HDC hdc, const hp_table *t, int content_w) {
                 ch = ih;
             }
         }
+        if (c->container) {
+            int ih = measure_container_height(c->container, cw > 8 ? cw - 8 : cw);
+            text_h += ih;
+        }
+        if (c->equation) {
+            text_h += measure_equation_height(c->equation);
+        }
         for (p = 0; p < c->paragraph_count; p++) {
             text_h += measure_para_height(hdc, &c->paragraphs[p], cw > 8 ? cw - 8 : cw);
+        }
+        for (n = 0; n < c->nested_table_count; n++) {
+            text_h += measure_table_height(hdc, c->nested_tables[n], cw > 8 ? cw - 8 : cw);
         }
         if (text_h + 6 > ch) {
             ch = text_h + 6;
@@ -416,6 +458,12 @@ static int measure_block_height(HDC hdc, const hp_block *b, int content_w) {
     }
     if (b->kind == HP_BLOCK_IMAGE && b->image) {
         return measure_image_height(b->image, content_w);
+    }
+    if (b->kind == HP_BLOCK_EQUATION && b->equation) {
+        return measure_equation_height(b->equation);
+    }
+    if (b->kind == HP_BLOCK_CONTAINER && b->container) {
+        return measure_container_height(b->container, content_w);
     }
     return 8;
 }
@@ -602,10 +650,26 @@ static void draw_para(HDC hdc, const hp_paragraph *para, int left, int right, in
     *y = line_top + line_h + 4;
 }
 
+static int hwp_delta_px(int32_t hwp) {
+    if (hwp >= 0) {
+        return (int)hp_hwp_to_px((uint32_t)hwp);
+    }
+    return -(int)hp_hwp_to_px((uint32_t)(-hwp));
+}
+
+static void apply_float_origin(const hp_float_pos *pos, int has_pos, int *x, int *y) {
+    if (!has_pos || !pos || pos->treat_as_char) {
+        return;
+    }
+    *x += hwp_delta_px(pos->horz_offset_hwp);
+    *y += hwp_delta_px(pos->vert_offset_hwp);
+}
+
 static void draw_image(HDC hdc, const hp_image *img, int left, int right, int *y) {
     int iw = 0, ih = 0;
     int dw, dh;
     int content_w = right - left;
+    int x, yy;
     HBITMAP hbmp;
     HDC mem;
     HGDIOBJ old;
@@ -630,14 +694,75 @@ static void draw_image(HDC hdc, const hp_image *img, int left, int right, int *y
         dh = dh * content_w / dw;
         dw = content_w;
     }
+    x = left + (content_w - dw) / 2;
+    yy = *y;
+    apply_float_origin(&img->pos, img->has_pos, &x, &yy);
     mem = CreateCompatibleDC(hdc);
     old = SelectObject(mem, hbmp);
     SetStretchBltMode(hdc, HALFTONE);
-    StretchBlt(hdc, left + (content_w - dw) / 2, *y, dw, dh, mem, 0, 0, iw, ih, SRCCOPY);
+    StretchBlt(hdc, x, yy, dw, dh, mem, 0, 0, iw, ih, SRCCOPY);
     SelectObject(mem, old);
     DeleteDC(mem);
     DeleteObject(hbmp);
-    *y += dh + 8;
+    {
+        int bottom = yy + dh;
+        if (bottom < *y + dh) {
+            bottom = *y + dh;
+        }
+        *y = bottom + 8;
+    }
+}
+
+static void draw_equation(HDC hdc, const hp_equation *eq, int left, int right, int *y) {
+    wchar_t *w;
+    HFONT font, old;
+    RECT rc;
+    const char *script;
+    if (!eq) {
+        return;
+    }
+    script = eq->script && eq->script[0] ? eq->script : "[수식]";
+    w = utf8_to_wide(script);
+    if (!w) {
+        *y += 24;
+        return;
+    }
+    font = CreateFontW(-(int)(eq->font_size_hwp ? hp_hwp_to_px(eq->font_size_hwp) : 14), 0, 0, 0, FW_NORMAL, TRUE, 0,
+                       0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0, L"Malgun Gothic");
+    old = (HFONT)SelectObject(hdc, font);
+    SetTextColor(hdc, RGB(20, 40, 80));
+    SetBkMode(hdc, TRANSPARENT);
+    rc.left = left + 4;
+    rc.top = *y + 2;
+    rc.right = right - 4;
+    rc.bottom = *y + 26;
+    DrawTextW(hdc, w, -1, &rc, DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+    SelectObject(hdc, old);
+    DeleteObject(font);
+    free(w);
+    *y += 28;
+}
+
+static void draw_container(HDC hdc, const hp_container *c, int left, int right, int *y) {
+    size_t i;
+    int x = left, yy = *y;
+    int content_w = right - left;
+    int max_bottom = *y;
+    if (!c) {
+        return;
+    }
+    apply_float_origin(&c->pos, c->has_pos, &x, &yy);
+    for (i = 0; i < c->image_count; i++) {
+        int iy = yy;
+        int ir = x + content_w;
+        if (c->images[i]) {
+            draw_image(hdc, c->images[i], x, ir, &iy);
+            if (iy > max_bottom) {
+                max_bottom = iy;
+            }
+        }
+    }
+    *y = max_bottom > *y ? max_bottom : (*y + 8);
 }
 
 static void draw_table(HDC hdc, const hp_table *t, int left, int right, int *y) {
@@ -702,7 +827,7 @@ static void draw_table(HDC hdc, const hp_table *t, int left, int right, int *y) 
     for (i = 0; i < t->cell_count; i++) {
         const hp_table_cell *cell = &t->cells[i];
         int cw, ch = cell->height_hwp ? (int)hp_hwp_to_px(cell->height_hwp) : 0;
-        size_t p;
+        size_t p, n;
         if (cell->row < 0 || cell->row >= rows || cell->col < 0 || cell->col >= cols) {
             continue;
         }
@@ -713,9 +838,18 @@ static void draw_table(HDC hdc, const hp_table *t, int left, int right, int *y) 
                 ch = ih;
             }
         }
+        if (cell->container) {
+            ch += measure_container_height(cell->container, cw > 8 ? cw - 8 : cw);
+        }
+        if (cell->equation) {
+            ch += measure_equation_height(cell->equation);
+        }
         for (p = 0; p < cell->paragraph_count; p++) {
             int th = measure_para_height(hdc, &cell->paragraphs[p], cw > 8 ? cw - 8 : cw);
             ch += th;
+        }
+        for (n = 0; n < cell->nested_table_count; n++) {
+            ch += measure_table_height(hdc, cell->nested_tables[n], cw > 8 ? cw - 8 : cw);
         }
         if (ch < 20) {
             ch = 20;
@@ -768,11 +902,21 @@ static void draw_table(HDC hdc, const hp_table *t, int left, int right, int *y) 
             Rectangle(hdc, cx, cy, cx + cw, cy + ch);
             {
                 int ty = cy + 3;
+                size_t n;
                 if (cell->image) {
                     draw_image(hdc, cell->image, cx + 4, cx + cw - 4, &ty);
                 }
+                if (cell->container) {
+                    draw_container(hdc, cell->container, cx + 4, cx + cw - 4, &ty);
+                }
+                if (cell->equation) {
+                    draw_equation(hdc, cell->equation, cx + 4, cx + cw - 4, &ty);
+                }
                 for (p = 0; p < cell->paragraph_count; p++) {
                     draw_para(hdc, &cell->paragraphs[p], cx + 4, cx + cw - 4, &ty);
+                }
+                for (n = 0; n < cell->nested_table_count; n++) {
+                    draw_table(hdc, cell->nested_tables[n], cx + 4, cx + cw - 4, &ty);
                 }
             }
         }
@@ -788,15 +932,27 @@ static void draw_table(HDC hdc, const hp_table *t, int left, int right, int *y) 
 }
 
 static void draw_block(HDC hdc, const hp_block *b, int left, int right, int *y) {
+    int x = left;
+    int yy = *y;
     if (!b) {
         return;
     }
     if (b->kind == HP_BLOCK_PARAGRAPH) {
         draw_para(hdc, &b->paragraph, left, right, y);
     } else if (b->kind == HP_BLOCK_TABLE && b->table) {
-        draw_table(hdc, b->table, left, right, y);
+        if (b->table->has_pos) {
+            apply_float_origin(&b->table->pos, 1, &x, &yy);
+            *y = yy;
+            draw_table(hdc, b->table, x, right, y);
+        } else {
+            draw_table(hdc, b->table, left, right, y);
+        }
     } else if (b->kind == HP_BLOCK_IMAGE && b->image) {
         draw_image(hdc, b->image, left, right, y);
+    } else if (b->kind == HP_BLOCK_EQUATION && b->equation) {
+        draw_equation(hdc, b->equation, left, right, y);
+    } else if (b->kind == HP_BLOCK_CONTAINER && b->container) {
+        draw_container(hdc, b->container, left, right, y);
     }
 }
 
