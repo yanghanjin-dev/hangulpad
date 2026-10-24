@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build shared zlib/libzip for MinGW and package GUI + CLI + DLLs into a zip.
+# Build shared zlib/libzip for MinGW and package GUI + CLI + DLLs + sample pages.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -8,6 +8,8 @@ WORKDIR="${WORKDIR:-/tmp/win-deps-dll}"
 OUT_DIR="$ROOT/dist/windows-portable"
 ZIP_OUT="$ROOT/dist/hp-windows-x86_64-portable.zip"
 WIN_CC="${WIN_CC:-x86_64-w64-mingw32-gcc}"
+SAMPLE_HWPX_SRC="${SAMPLE_HWPX_SRC:-}"
+SAMPLE_PAGES_SRC="${SAMPLE_PAGES_SRC:-$ROOT/sample/pages}"
 
 command -v "$WIN_CC" >/dev/null || { echo "missing $WIN_CC"; exit 1; }
 
@@ -43,7 +45,9 @@ if [[ ! -f "$WIN_PREFIX/bin/libzip.dll" || ! -f "$WIN_PREFIX/bin/zlib1.dll" ]]; 
 fi
 
 cd "$ROOT"
-mkdir -p build/win-dll "$OUT_DIR"
+mkdir -p build/win-dll
+rm -rf "$OUT_DIR"
+mkdir -p "$OUT_DIR"
 CFLAGS="-std=c11 -Wall -Wextra -O2 -Iinclude -I$WIN_PREFIX/include"
 for f in common ir hwpx_read hwpx_write hwp; do
   "$WIN_CC" $CFLAGS -c "src/${f}.c" -o "build/win-dll/${f}.o"
@@ -51,7 +55,9 @@ done
 "$WIN_CC" $CFLAGS -c src/cli.c -o build/win-dll/cli.o
 "$WIN_CC" $CFLAGS -c src/gui_win.c -o build/win-dll/gui_win.o
 
-LIBS=(-L"$WIN_PREFIX/lib" -lzip -lz -Wl,-Bstatic -lwinpthread -Wl,-Bdynamic -lcomdlg32 -luser32 -lgdi32 -lshell32)
+# WIC (windowscodecs) for JPG page decode; ole32 for COM.
+LIBS=(-L"$WIN_PREFIX/lib" -lzip -lz -Wl,-Bstatic -lwinpthread -Wl,-Bdynamic \
+  -lcomdlg32 -luser32 -lgdi32 -lwindowscodecs -lole32 -luuid -lshell32)
 
 # Console CLI
 "$WIN_CC" -o "$OUT_DIR/hp.exe" \
@@ -60,7 +66,7 @@ LIBS=(-L"$WIN_PREFIX/lib" -lzip -lz -Wl,-Bstatic -lwinpthread -Wl,-Bdynamic -lco
   "${LIBS[@]}"
 x86_64-w64-mingw32-strip "$OUT_DIR/hp.exe"
 
-# GUI app (no console window). -municode selects wWinMain entry.
+# GUI page viewer (GDI+). -municode selects wWinMain entry.
 "$WIN_CC" -mwindows -municode -o "$OUT_DIR/HangulPad.exe" \
   build/win-dll/common.o build/win-dll/ir.o build/win-dll/hwpx_read.o \
   build/win-dll/hwpx_write.o build/win-dll/hwp.o build/win-dll/gui_win.o \
@@ -74,12 +80,62 @@ cp -f "$WIN_PREFIX/bin/libzip.dll" "$OUT_DIR/"
 [[ -f /usr/lib/gcc/x86_64-w64-mingw32/13-win32/libgcc_s_seh-1.dll ]] && \
   cp -f /usr/lib/gcc/x86_64-w64-mingw32/13-win32/libgcc_s_seh-1.dll "$OUT_DIR/"
 
+# Sample HWPX + ordered page JPGs (JPG-like document view)
+mkdir -p "$OUT_DIR/documents" "$OUT_DIR/pages"
+DOC_NAME="공공부문-인공지능-윤리기준.hwpx"
+if [[ -z "$SAMPLE_HWPX_SRC" ]]; then
+  for cand in \
+    "$ROOT/sample/documents/$DOC_NAME" \
+    "$ROOT/sample/documents/sample.hwpx" \
+    /home/ubuntu/.cursor/projects/workspace/uploads/_______________0f34.hwpx
+  do
+    if [[ -f "$cand" ]]; then SAMPLE_HWPX_SRC="$cand"; break; fi
+  done
+fi
+if [[ -n "$SAMPLE_HWPX_SRC" && -f "$SAMPLE_HWPX_SRC" ]]; then
+  cp -f "$SAMPLE_HWPX_SRC" "$OUT_DIR/documents/$DOC_NAME"
+  cp -f "$SAMPLE_HWPX_SRC" "$OUT_DIR/documents/sample.hwpx"
+else
+  echo "WARN: sample HWPX not found; generating minimal sample" >&2
+  if [[ -x "$ROOT/build/hp" ]]; then
+    "$ROOT/build/hp" new "$OUT_DIR/documents/sample.hwpx" \
+      --text "한글패드 샘플입니다." --title "샘플" || true
+  fi
+fi
+
+if [[ -d "$SAMPLE_PAGES_SRC" ]] && compgen -G "$SAMPLE_PAGES_SRC/*.[jJ][pP][gG]" > /dev/null; then
+  # Prefer already-ordered 00.jpg … names; otherwise copy sorted by name.
+  mapfile -t page_files < <(ls -1 "$SAMPLE_PAGES_SRC"/[0-9][0-9].jpg 2>/dev/null || true)
+  if [[ ${#page_files[@]} -eq 0 ]]; then
+    mapfile -t page_files < <(ls -1 "$SAMPLE_PAGES_SRC"/*.{jpg,JPG,jpeg,JPEG} 2>/dev/null | sort)
+  fi
+  i=0
+  for src in "${page_files[@]}"; do
+    printf -v dest "%02d.jpg" "$i"
+    cp -f "$src" "$OUT_DIR/pages/$dest"
+    # Also under documents/pages for sidecar next to the HWPX
+    mkdir -p "$OUT_DIR/documents/pages"
+    cp -f "$src" "$OUT_DIR/documents/pages/$dest"
+    i=$((i + 1))
+  done
+  echo "Packaged $i page images into pages/ and documents/pages/"
+else
+  echo "WARN: no sample pages at $SAMPLE_PAGES_SRC" >&2
+fi
+
 cat > "$OUT_DIR/사용법.txt" << 'EOF'
 한글패드 Windows 포터블 패키지
 
 ★ 창 프로그램 (권장)
-  HangulPad.exe  더블클릭 → 윈도우 창이 열리고 내용을 보고 편집할 수 있습니다.
-  메뉴: 파일 → 열기 / 저장 (HWPX)
+  HangulPad.exe  더블클릭 → 샘플 문서가 페이지 이미지(JPG)처럼 표시됩니다.
+  이전/다음 버튼 또는 ← → 키로 페이지 이동
+  메뉴: 파일 → 샘플 문서 열기 / HWPX 열기
+        보기 → 페이지 보기 (JPG) / 텍스트 보기
+
+★ 폴더 구조
+  documents\공공부문-인공지능-윤리기준.hwpx
+  pages\00.jpg … (문서 페이지 이미지)
+  documents\pages\  (동일 페이지, HWPX 옆 sidecar)
 
 ★ 콘솔 CLI
   hp.exe new demo.hwpx --text "한글패드"
@@ -89,20 +145,17 @@ cat > "$OUT_DIR/사용법.txt" << 'EOF'
 EOF
 
 cat > "$OUT_DIR/README.txt" << 'EOF'
-HangulPad Windows x64 portable
+HangulPad Windows x64 portable — page image viewer
 
-Run HangulPad.exe for the GUI window (open/save HWPX, edit text).
+Run HangulPad.exe: sample HWPX opens as page JPGs (prev/next).
+Layout: documents\*.hwpx + pages\00.jpg …
 Keep all DLLs next to the EXE files.
 CLI: hp.exe
 EOF
 
-# Sample document for first launch demo (optional)
-if [[ -x "$ROOT/build/hp" ]]; then
-  "$ROOT/build/hp" new "$OUT_DIR/샘플.hwpx" --text "한글패드 샘플입니다. 파일→열기로 이 문서를 불러보세요." --title "샘플" || true
-fi
-
 rm -f "$ZIP_OUT"
 (cd "$ROOT/dist" && zip -r "$(basename "$ZIP_OUT")" windows-portable)
 echo "Wrote $ZIP_OUT"
-ls -la "$OUT_DIR" "$ZIP_OUT"
+ls -la "$OUT_DIR" "$OUT_DIR/documents" "$OUT_DIR/pages" "$ZIP_OUT"
 file "$OUT_DIR/HangulPad.exe" "$OUT_DIR/hp.exe"
+echo "page count: $(ls -1 "$OUT_DIR/pages"/*.jpg 2>/dev/null | wc -l)"
