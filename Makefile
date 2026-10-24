@@ -10,7 +10,7 @@ VERSION ?= 0.1.0
 LIB_SRCS := src/common.c src/ir.c src/hwpx_read.c src/hwpx_write.c src/hwp.c
 LIB_OBJS := $(LIB_SRCS:src/%.c=build/%.o)
 
-.PHONY: all clean test cli check release release-windows install uninstall dist
+.PHONY: all clean test cli check release release-windows release-windows-portable install uninstall dist
 
 all: cli test
 
@@ -64,6 +64,10 @@ dist/hp.exe: $(LIB_SRCS) src/cli.c | dist build
 	@echo "executable: $$(pwd)/dist/hp.exe"
 	@file dist/hp.exe
 	@ls -la dist/hp.exe
+
+# Portable Windows zip: hp.exe + zlib1.dll + libzip.dll (+ MinGW runtime DLLs)
+release-windows-portable:
+	./scripts/package-windows-portable.sh
 
 install: dist/hp
 	install -d $(DESTDIR)$(PREFIX)/bin

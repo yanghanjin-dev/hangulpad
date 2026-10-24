@@ -46,17 +46,27 @@ make install  # install to /usr/local/bin/hp (PREFIX=... optional)
 |------|------|
 | `build/hp` | Linux 개발용 |
 | `dist/hp` | Linux 배포용 (`make release`) |
-| `dist/hp.exe` | Windows x64 콘솔 (`make release-windows`) |
+| `dist/hp.exe` | Windows x64 정적 빌드 (`make release-windows`) |
+| `dist/hp-windows-x86_64-portable.zip` | **DLL 포함 포터블 패키지** (권장) |
 
-Windows 빌드 (크로스 컴파일):
+### Windows 포터블 다운로드
+
+- GitHub Release: https://github.com/yanghanjin-dev/hangulpad/releases/download/v0.1.0-windows/hp-windows-x86_64-portable.zip  
+- ZIP을 풀면 `hp.exe` + `zlib1.dll` + `libzip.dll` (+ MinGW 런타임 DLL)이 같은 폴더에 있습니다.  
+- **같은 폴더에서** `hp.exe`를 실행하세요.
+
+```bat
+hp.exe new demo.hwpx --text "한글패드"
+hp.exe open demo.hwpx
+```
+
+Windows 정적/크로스 빌드 (개발용):
 
 ```bash
 sudo apt-get install -y gcc-mingw-w64-x86-64 cmake curl
-./scripts/build-win-deps.sh   # static zlib + libzip → /tmp/win-prefix
-make release-windows          # → dist/hp.exe
+./scripts/build-win-deps.sh
+make release-windows
 ```
-
-`hp.exe`는 추가 DLL 없이 동작하는 정적 링크 콘솔 앱입니다.
 
 ### HWPX roundtrip
 
