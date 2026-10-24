@@ -8,13 +8,25 @@
 extern "C" {
 #endif
 
+typedef enum hp_align {
+    HP_ALIGN_LEFT = 0,
+    HP_ALIGN_CENTER = 1,
+    HP_ALIGN_RIGHT = 2,
+    HP_ALIGN_JUSTIFY = 3
+} hp_align;
+
 typedef struct hp_run {
-    char *text; /* UTF-8; ownership by run */
+    char *text;          /* UTF-8; ownership by run */
+    char *font_face;     /* UTF-8 Hangul face name; may be NULL */
+    uint32_t font_size_hwp; /* 1/100 pt (HWP height) — 1000 = 10pt */
+    uint32_t color_rgb;  /* 0x00RRGGBB */
+    int bold;
 } hp_run;
 
 typedef struct hp_paragraph {
     hp_run *runs;
     size_t run_count;
+    hp_align align;
 } hp_paragraph;
 
 typedef struct hp_page {

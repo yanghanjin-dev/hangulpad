@@ -36,7 +36,9 @@ static void hp_run_free(hp_run *run) {
         return;
     }
     free(run->text);
+    free(run->font_face);
     run->text = NULL;
+    run->font_face = NULL;
 }
 
 static void hp_paragraph_free(hp_paragraph *p) {
@@ -105,8 +107,13 @@ hp_status hp_section_add_paragraph_text(hp_section *sec, const char *text) {
         free(runs);
         return HP_ERR_NOMEM;
     }
+    runs[0].font_face = NULL;
+    runs[0].font_size_hwp = 1000; /* 10pt */
+    runs[0].color_rgb = 0;
+    runs[0].bold = 0;
     sec->paragraphs[sec->paragraph_count].runs = runs;
     sec->paragraphs[sec->paragraph_count].run_count = 1;
+    sec->paragraphs[sec->paragraph_count].align = HP_ALIGN_LEFT;
     sec->paragraph_count++;
     return HP_OK;
 }
@@ -171,6 +178,24 @@ char *hp_document_plain_text(const hp_document *doc) {
         const hp_section *sec = &doc->sections[si];
         for (pi = 0; pi < sec->paragraph_count; pi++) {
             const hp_paragraph *para = &sec->paragraphs[pi];
+            int blank = 1;
+            for (ri = 0; ri < para->run_count; ri++) {
+                const char *t = para->runs[ri].text ? para->runs[ri].text : "";
+                const char *c = t;
+                while (*c) {
+                    if ((unsigned char)*c > 32) {
+                        blank = 0;
+                        break;
+                    }
+                    c++;
+                }
+                if (!blank) {
+                    break;
+                }
+            }
+            if (blank) {
+                continue; /* layout spacers omitted from plain text */
+            }
             if (!first) {
                 if (len + 2 > cap) {
                     char *nbuf;

@@ -55,22 +55,22 @@ done
 "$WIN_CC" $CFLAGS -c src/cli.c -o build/win-dll/cli.o
 "$WIN_CC" $CFLAGS -c src/gui_win.c -o build/win-dll/gui_win.o
 
-# WIC (windowscodecs) for JPG page decode; ole32 for COM.
-LIBS=(-L"$WIN_PREFIX/lib" -lzip -lz -Wl,-Bstatic -lwinpthread -Wl,-Bdynamic \
-  -lcomdlg32 -luser32 -lgdi32 -lwindowscodecs -lole32 -luuid -lshell32)
+LIBS_CLI=(-L"$WIN_PREFIX/lib" -lzip -lz -Wl,-Bstatic -lwinpthread -Wl,-Bdynamic)
+LIBS_GUI=(-L"$WIN_PREFIX/lib" -lzip -lz -Wl,-Bstatic -lwinpthread -Wl,-Bdynamic \
+  -lcomdlg32 -luser32 -lgdi32 -lshell32)
 
 # Console CLI
 "$WIN_CC" -o "$OUT_DIR/hp.exe" \
   build/win-dll/common.o build/win-dll/ir.o build/win-dll/hwpx_read.o \
   build/win-dll/hwpx_write.o build/win-dll/hwp.o build/win-dll/cli.o \
-  "${LIBS[@]}"
+  "${LIBS_CLI[@]}"
 x86_64-w64-mingw32-strip "$OUT_DIR/hp.exe"
 
-# GUI page viewer (GDI+). -municode selects wWinMain entry.
+# GUI — HWPX engine layout renderer (fonts/sizes). -municode → wWinMain.
 "$WIN_CC" -mwindows -municode -o "$OUT_DIR/HangulPad.exe" \
   build/win-dll/common.o build/win-dll/ir.o build/win-dll/hwpx_read.o \
   build/win-dll/hwpx_write.o build/win-dll/hwp.o build/win-dll/gui_win.o \
-  "${LIBS[@]}"
+  "${LIBS_GUI[@]}"
 x86_64-w64-mingw32-strip "$OUT_DIR/HangulPad.exe"
 
 cp -f "$WIN_PREFIX/bin/zlib1.dll" "$OUT_DIR/"
@@ -80,13 +80,14 @@ cp -f "$WIN_PREFIX/bin/libzip.dll" "$OUT_DIR/"
 [[ -f /usr/lib/gcc/x86_64-w64-mingw32/13-win32/libgcc_s_seh-1.dll ]] && \
   cp -f /usr/lib/gcc/x86_64-w64-mingw32/13-win32/libgcc_s_seh-1.dll "$OUT_DIR/"
 
-# Sample HWPX + ordered page JPGs (JPG-like document view)
-mkdir -p "$OUT_DIR/documents" "$OUT_DIR/pages"
+# Sample HWPX — GUI renders via HWPX engine (fonts/sizes), not page images.
+mkdir -p "$OUT_DIR/documents"
 DOC_NAME="공공부문-인공지능-윤리기준.hwpx"
 if [[ -z "$SAMPLE_HWPX_SRC" ]]; then
   for cand in \
     "$ROOT/sample/documents/$DOC_NAME" \
     "$ROOT/sample/documents/sample.hwpx" \
+    /home/ubuntu/.cursor/projects/workspace/uploads/_______________3650.hwpx \
     /home/ubuntu/.cursor/projects/workspace/uploads/_______________0f34.hwpx
   do
     if [[ -f "$cand" ]]; then SAMPLE_HWPX_SRC="$cand"; break; fi
@@ -103,39 +104,19 @@ else
   fi
 fi
 
-if [[ -d "$SAMPLE_PAGES_SRC" ]] && compgen -G "$SAMPLE_PAGES_SRC/*.[jJ][pP][gG]" > /dev/null; then
-  # Prefer already-ordered 00.jpg … names; otherwise copy sorted by name.
-  mapfile -t page_files < <(ls -1 "$SAMPLE_PAGES_SRC"/[0-9][0-9].jpg 2>/dev/null || true)
-  if [[ ${#page_files[@]} -eq 0 ]]; then
-    mapfile -t page_files < <(ls -1 "$SAMPLE_PAGES_SRC"/*.{jpg,JPG,jpeg,JPEG} 2>/dev/null | sort)
-  fi
-  i=0
-  for src in "${page_files[@]}"; do
-    printf -v dest "%02d.jpg" "$i"
-    cp -f "$src" "$OUT_DIR/pages/$dest"
-    # Also under documents/pages for sidecar next to the HWPX
-    mkdir -p "$OUT_DIR/documents/pages"
-    cp -f "$src" "$OUT_DIR/documents/pages/$dest"
-    i=$((i + 1))
-  done
-  echo "Packaged $i page images into pages/ and documents/pages/"
-else
-  echo "WARN: no sample pages at $SAMPLE_PAGES_SRC" >&2
-fi
-
 cat > "$OUT_DIR/사용법.txt" << 'EOF'
 한글패드 Windows 포터블 패키지
 
 ★ 창 프로그램 (권장)
-  HangulPad.exe  더블클릭 → 샘플 문서가 페이지 이미지(JPG)처럼 표시됩니다.
-  이전/다음 버튼 또는 ← → 키로 페이지 이동
+  HangulPad.exe  더블클릭 → HWPX 엔진이 문서를 읽어
+  글꼴·크기·정렬을 반영해 PDF처럼 페이지로 표시합니다.
+  (페이지 그림 파일이 아닙니다)
+
+  이전/다음, 방향키, PageUp/Down, 스페이스, 마우스 휠로 이동
   메뉴: 파일 → 샘플 문서 열기 / HWPX 열기
-        보기 → 페이지 보기 (JPG) / 텍스트 보기
 
 ★ 폴더 구조
   documents\공공부문-인공지능-윤리기준.hwpx
-  pages\00.jpg … (문서 페이지 이미지)
-  documents\pages\  (동일 페이지, HWPX 옆 sidecar)
 
 ★ 콘솔 CLI
   hp.exe new demo.hwpx --text "한글패드"
@@ -145,17 +126,16 @@ cat > "$OUT_DIR/사용법.txt" << 'EOF'
 EOF
 
 cat > "$OUT_DIR/README.txt" << 'EOF'
-HangulPad Windows x64 portable — page image viewer
+HangulPad Windows x64 portable — HWPX engine layout viewer
 
-Run HangulPad.exe: sample HWPX opens as page JPGs (prev/next).
-Layout: documents\*.hwpx + pages\00.jpg …
-Keep all DLLs next to the EXE files.
+Run HangulPad.exe: opens the sample HWPX and renders paragraphs with
+font face/size/alignment from the document (not pre-rendered JPEGs).
+Keep all DLLs next to the EXE files. Sample: documents\*.hwpx
 CLI: hp.exe
 EOF
 
 rm -f "$ZIP_OUT"
 (cd "$ROOT/dist" && zip -r "$(basename "$ZIP_OUT")" windows-portable)
 echo "Wrote $ZIP_OUT"
-ls -la "$OUT_DIR" "$OUT_DIR/documents" "$OUT_DIR/pages" "$ZIP_OUT"
+ls -la "$OUT_DIR" "$OUT_DIR/documents" "$ZIP_OUT"
 file "$OUT_DIR/HangulPad.exe" "$OUT_DIR/hp.exe"
-echo "page count: $(ls -1 "$OUT_DIR/pages"/*.jpg 2>/dev/null | wc -l)"

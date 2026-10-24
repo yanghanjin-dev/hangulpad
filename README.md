@@ -15,7 +15,7 @@ A lightweight Korean word processor (WordPad-simple). **Engine first:** HWPX rea
 | HWPX read/write | Minimal valid package + plain-text roundtrip |
 | HWP 5.x | **Read stub** (CFB detect only) |
 | CLI (`build/hp`) | `open` / `new` / `save` / `roundtrip` / `probe` |
-| Desktop UI (Windows) | `HangulPad.exe` PDF-like page viewer |
+| Desktop UI (Windows) | `HangulPad.exe` HWPX engine layout (fonts/sizes) |
 | Full HWP record parse / HWP write | Deferred |
 
 Default save format: **HWPX**.
@@ -49,12 +49,12 @@ make install  # install to /usr/local/bin/hp (PREFIX=... optional)
 | `dist/hp.exe` | Windows x64 정적 빌드 (`make release-windows`) |
 | `dist/hp-windows-x86_64-portable.zip` | **DLL 포함 포터블 패키지** (권장) |
 
-### Windows 포터블 다운로드 (PDF처럼 페이지 보기)
+### Windows 포터블 다운로드 (HWPX 엔진 레이아웃)
 
 - **다운로드:** https://github.com/yanghanjin-dev/hangulpad/releases/download/v0.1.0-windows/hp-windows-x86_64-portable.zip  
-- ZIP을 풀고 **`HangulPad.exe`** 실행 → 첨부 PDF와 같은 **페이지 이미지**로 「공공부문 인공지능 윤리기준」(17쪽)이 보입니다.  
+- ZIP을 풀고 **`HangulPad.exe`** 실행 → HWPX를 **엔진으로 읽어** 글꼴·크기·정렬을 반영한 페이지 보기로 표시합니다 (그림 파일 슬라이드가 아님).  
 - 이전/다음, 방향키, PageUp/Down, 스페이스, 마우스 휠로 넘깁니다.  
-- `HangulPad.exe`와 DLL, `documents/`, `pages/` 폴더를 함께 두세요.  
+- `HangulPad.exe`와 DLL, `documents/` 를 함께 두세요.  
 - CLI: 같은 폴더의 `hp.exe`
 
 ```bat
@@ -88,6 +88,6 @@ See [`NOTICE`](NOTICE) for the Hancom HWP / OWPML attribution placeholder requir
 
 ## Non-goals (this PR)
 
-- Full layout engine (tables/boxes re-flow); sample uses page images from the reference PDF
+- Tables/shapes/headers full fidelity (paragraph text styles are rendered)
 - Binary HWP write
 - Complete WordPad-class editing UI
