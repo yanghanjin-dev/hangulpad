@@ -1,0 +1,18 @@
+[package]
+name = "hp-cli"
+description = "HangulPad engine CLI (HWPX roundtrip)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "hp"
+path = "src/main.rs"
+
+[dependencies]
+hp-ir = { workspace = true }
+hp-hwpx = { workspace = true }
+hp-hwp = { workspace = true }
+clap = { workspace = true }

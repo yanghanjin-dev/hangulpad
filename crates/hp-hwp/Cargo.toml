@@ -1,0 +1,12 @@
+[package]
+name = "hp-hwp"
+description = "HangulPad HWP 5.x codec (read stub in Phase 1)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+hp-ir = { workspace = true }
+thiserror = { workspace = true }

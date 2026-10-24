@@ -1,0 +1,24 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/hp-ir",
+    "crates/hp-hwpx",
+    "crates/hp-hwp",
+    "crates/hp-cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/yanghanjin-dev/hangulpad"
+authors = ["HangulPad contributors"]
+
+[workspace.dependencies]
+hp-ir = { path = "crates/hp-ir" }
+hp-hwpx = { path = "crates/hp-hwpx" }
+hp-hwp = { path = "crates/hp-hwp" }
+thiserror = "2"
+quick-xml = "0.37"
+zip = { version = "2", default-features = false, features = ["deflate"] }
+clap = { version = "4", features = ["derive"] }
