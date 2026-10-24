@@ -5,7 +5,7 @@
 
 A lightweight Korean word processor (WordPad-simple). **Engine first:** HWPX read/write + internal IR now; desktop UI later.
 
-> **Note:** Phase 0–1 engine is implemented in **C11** (converted from the earlier Rust scaffold). UI stack for later phases remains open (previously planned: Tauri 2 + Rust).
+> **Engine language:** **C11** (confirmed). Desktop UI later — Tauri 2 shell planned, talking to this C engine via FFI.
 
 ## Status (Phase 0–1 scaffold)
 
