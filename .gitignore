@@ -1,9 +1,12 @@
-/target/
-**/target/
-Cargo.lock.bak
+/build/
+*.o
+*.a
+*.so
 *.swp
 .DS_Store
 .idea/
 .vscode/
 *.hwpx.bak
 /tmp/
+/target/
+Cargo.lock

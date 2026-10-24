@@ -1,47 +1,51 @@
 # 한글패드 / HangulPad
 
 가볍고 단순한 한글 워드 프로세서를 목표로 하는 오픈소스 프로젝트입니다.  
-**엔진 우선:** HWPX 읽기·쓰기와 IR을 먼저 만들고, Tauri 데스크톱 UI는 이후 단계에서 붙입니다.
+**엔진 우선:** HWPX 읽기·쓰기와 IR을 먼저 만들고, 데스크톱 UI는 이후 단계에서 붙입니다.
 
-A lightweight Korean word processor (WordPad-simple). **Engine first:** HWPX read/write + internal IR now; Tauri UI later.
+A lightweight Korean word processor (WordPad-simple). **Engine first:** HWPX read/write + internal IR now; desktop UI later.
+
+> **Note:** Phase 0–1 engine is implemented in **C11** (converted from the earlier Rust scaffold). UI stack for later phases remains open (previously planned: Tauri 2 + Rust).
 
 ## Status (Phase 0–1 scaffold)
 
 | Area | Status |
 |------|--------|
-| `hp-ir` internal document model | MVP (paragraph / run / section) |
-| `hp-hwpx` HWPX read/write | Minimal valid package + plain-text roundtrip |
-| `hp-hwp` HWP 5.x | **Read stub** (CFB detect only) |
-| `hp-cli` (`hp`) | `open` / `new` / `save` / `roundtrip` / `probe` |
-| Tauri WordPad UI | Deferred |
+| `hp` IR (`include/hp/ir.h`) | MVP (paragraph / run / section) |
+| HWPX read/write | Minimal valid package + plain-text roundtrip |
+| HWP 5.x | **Read stub** (CFB detect only) |
+| CLI (`build/hp`) | `open` / `new` / `save` / `roundtrip` / `probe` |
+| Desktop UI | Deferred |
 | Full HWP record parse / HWP write | Deferred |
 
 Default save format: **HWPX**.
 
-## Workspace
+## Layout
 
 ```
-crates/
-  hp-ir/     Internal document model
-  hp-hwpx/   HWPX (OWPML) codec
-  hp-hwp/    HWP 5.x codec (stub)
-  hp-cli/    Engine CLI binary `hp`
+include/hp/   Public headers (ir, hwpx, hwp, common)
+src/          Engine + CLI sources
+tests/        Roundtrip tests + fixtures
+Makefile      Build / test
 ```
 
 ## Build & test
 
+Dependencies: C11 compiler, `libzip` (`libzip-dev` on Debian/Ubuntu).
+
 ```bash
-cargo test --workspace
-cargo clippy --workspace --all-targets -- -D warnings
-cargo run -p hp-cli -- --help
+make          # builds build/hp and runs tests
+make test
+make cli
+./build/hp --help 2>/dev/null || ./build/hp
 ```
 
 ### HWPX roundtrip
 
 ```bash
-cargo run -p hp-cli -- new /tmp/a.hwpx --text "한글패드" --title demo
-cargo run -p hp-cli -- roundtrip /tmp/a.hwpx /tmp/b.hwpx
-cargo run -p hp-cli -- open /tmp/b.hwpx
+./build/hp new /tmp/a.hwpx --text "한글패드" --title demo
+./build/hp roundtrip /tmp/a.hwpx /tmp/b.hwpx
+./build/hp open /tmp/b.hwpx
 ```
 
 ## License
@@ -54,6 +58,6 @@ See [`NOTICE`](NOTICE) for the Hancom HWP / OWPML attribution placeholder requir
 
 ## Non-goals (this PR)
 
-- Full WordPad UI / Tauri app shell
+- Full WordPad UI / desktop app shell
 - Binary HWP write
-- Tables, images, headers/footers, encryption (IR slots reserved later)
+- Tables, images, headers/footers, encryption

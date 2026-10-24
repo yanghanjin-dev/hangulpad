@@ -6,40 +6,19 @@ on:
   pull_request:
     branches: [main]
 
-env:
-  CARGO_TERM_COLOR: always
-  RUSTFLAGS: -Dwarnings
-
 jobs:
-  test:
-    name: cargo test
+  build-test:
+    name: make test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - name: Test workspace
-        run: cargo test --workspace --all-targets
-
-  clippy:
-    name: cargo clippy
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
-      - uses: Swatinem/rust-cache@v2
-      - name: Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
-
-  fmt:
-    name: cargo fmt
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt
-      - name: Format check
-        run: cargo fmt --all -- --check
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y build-essential libzip-dev pkg-config
+      - name: Build and test
+        run: make clean && make test
+      - name: CLI smoke
+        run: |
+          ./build/hp new /tmp/a.hwpx --text "한글패드" --title ci
+          ./build/hp roundtrip /tmp/a.hwpx /tmp/b.hwpx
+          ./build/hp open /tmp/b.hwpx | grep -q "한글패드"
+          ./build/hp probe /tmp/b.hwpx | grep -q hwpx
