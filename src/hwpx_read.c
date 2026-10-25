@@ -20,8 +20,27 @@ typedef struct {
 
 typedef struct {
     hp_align align;
+    int32_t left_hwp;
+    int32_t right_hwp;
+    int32_t intent_hwp;
+    int32_t prev_hwp;
+    int32_t next_hwp;
+    int line_spacing_percent;
     int valid;
 } hp_para_style;
+
+typedef struct {
+    int left;
+    int right;
+    int top;
+    int bottom;
+    uint32_t color_left;
+    uint32_t color_right;
+    uint32_t color_top;
+    uint32_t color_bottom;
+    int width_px;
+    int valid;
+} hp_border_style;
 
 typedef struct {
     char *id;
@@ -36,6 +55,7 @@ typedef struct {
     hp_para_style paras[HP_MAX_STYLE];
     uint32_t fill_rgb[HP_MAX_FILL];
     int fill_valid[HP_MAX_FILL];
+    hp_border_style borders[HP_MAX_FILL];
     hp_bin_item bins[HP_MAX_BIN];
     int bin_count;
 } hp_style_tables;
@@ -402,7 +422,53 @@ static hp_align parse_align_name(const char *a) {
     if (strcmp(a, "LEFT") == 0) {
         return HP_ALIGN_LEFT;
     }
+    /* DISTRIBUTE / JUSTIFY */
     return HP_ALIGN_JUSTIFY;
+}
+
+static int32_t hc_margin_value(const char *margin_xml, const char *local, int32_t def) {
+    char key[64];
+    const char *p;
+    if (!margin_xml) {
+        return def;
+    }
+    snprintf(key, sizeof(key), ":%s ", local);
+    p = strstr(margin_xml, key);
+    if (!p) {
+        snprintf(key, sizeof(key), "<%s ", local);
+        p = strstr(margin_xml, key);
+    }
+    if (!p) {
+        snprintf(key, sizeof(key), ":%s>", local);
+        p = strstr(margin_xml, key);
+    }
+    if (!p) {
+        return def;
+    }
+    p = strstr(p, "value=\"");
+    if (!p) {
+        return def;
+    }
+    return (int32_t)strtol(p + 7, NULL, 10);
+}
+
+static int border_width_to_px(const char *w) {
+    double mm = 0.12;
+    int px;
+    if (w && w[0]) {
+        mm = strtod(w, NULL);
+        if (mm <= 0) {
+            mm = 0.12;
+        }
+    }
+    px = (int)(mm * 96.0 / 25.4 + 0.5);
+    if (px < 1) {
+        px = 1;
+    }
+    if (px > 4) {
+        px = 4;
+    }
+    return px;
 }
 
 static void parse_header_styles(const char *xml, hp_style_tables *st) {
@@ -485,10 +551,72 @@ static void parse_header_styles(const char *xml, hp_style_tables *st) {
         }
         if (id >= 0 && id < HP_MAX_STYLE) {
             const char *al = find_tag_open(p, "align");
+            const char *margin;
+            const char *ls;
             char horiz[32];
+            char mbuf[512];
             st->paras[id].align = HP_ALIGN_JUSTIFY;
+            st->paras[id].left_hwp = 0;
+            st->paras[id].right_hwp = 0;
+            st->paras[id].intent_hwp = 0;
+            st->paras[id].prev_hwp = 0;
+            st->paras[id].next_hwp = 0;
+            st->paras[id].line_spacing_percent = 160;
             if (al && al < end && attr_str(al, "horizontal", horiz, sizeof(horiz))) {
                 st->paras[id].align = parse_align_name(horiz);
+            }
+            /* Prefer last <hh:margin> inside paraPr (switch/case duplicates). */
+            margin = NULL;
+            {
+                const char *q = p;
+                while (q < end && (q = find_tag_open(q, "margin")) != NULL && q < end) {
+                    margin = q;
+                    q = find_element_end(q, "margin");
+                    if (!q) {
+                        break;
+                    }
+                }
+            }
+            if (margin && margin < end) {
+                const char *mend = find_element_end(margin, "margin");
+                size_t n = mend && mend > margin ? (size_t)(mend - margin) : 0;
+                if (n >= sizeof(mbuf)) {
+                    n = sizeof(mbuf) - 1;
+                }
+                if (n > 0) {
+                    memcpy(mbuf, margin, n);
+                    mbuf[n] = '\0';
+                    st->paras[id].intent_hwp = hc_margin_value(mbuf, "intent", 0);
+                    st->paras[id].left_hwp = hc_margin_value(mbuf, "left", 0);
+                    st->paras[id].right_hwp = hc_margin_value(mbuf, "right", 0);
+                    st->paras[id].prev_hwp = hc_margin_value(mbuf, "prev", 0);
+                    st->paras[id].next_hwp = hc_margin_value(mbuf, "next", 0);
+                }
+            }
+            ls = NULL;
+            {
+                const char *q = p;
+                while (q < end && (q = find_tag_open(q, "lineSpacing")) != NULL && q < end) {
+                    ls = q;
+                    q = find_close_gt(q);
+                    if (!q) {
+                        break;
+                    }
+                    q++;
+                }
+            }
+            if (ls && ls < end) {
+                char typ[16];
+                int val = attr_int(ls, "value", 160);
+                if (attr_str(ls, "type", typ, sizeof(typ)) && strcmp(typ, "PERCENT") == 0) {
+                    st->paras[id].line_spacing_percent = val > 0 ? val : 160;
+                } else if (val > 0) {
+                    /* ABSOLUTE HWPUNIT — approximate as percent of 1000 */
+                    st->paras[id].line_spacing_percent = (val * 100) / 1000;
+                    if (st->paras[id].line_spacing_percent < 100) {
+                        st->paras[id].line_spacing_percent = 100;
+                    }
+                }
             }
             st->paras[id].valid = 1;
         }
@@ -506,11 +634,56 @@ static void parse_header_styles(const char *xml, hp_style_tables *st) {
             const char *fill = find_tag_open(p, "fillBrush");
             const char *win = fill && fill < end ? find_tag_open(fill, "winBrush") : NULL;
             char color[32];
+            char typ[16];
+            char width[32];
+            const char *side;
+            hp_border_style *br = &st->borders[id];
+            memset(br, 0, sizeof(*br));
+            br->width_px = 1;
             if (win && win < end && attr_str(win, "faceColor", color, sizeof(color))) {
                 if (strcmp(color, "none") != 0) {
                     st->fill_rgb[id] = parse_color(color);
                     st->fill_valid[id] = 1;
                 }
+            }
+            side = find_tag_open(p, "leftBorder");
+            if (side && side < end && attr_str(side, "type", typ, sizeof(typ)) && strcmp(typ, "NONE") != 0) {
+                br->left = 1;
+                attr_str(side, "color", color, sizeof(color));
+                br->color_left = parse_color(color);
+                if (attr_str(side, "width", width, sizeof(width))) {
+                    br->width_px = border_width_to_px(width);
+                }
+            }
+            side = find_tag_open(p, "rightBorder");
+            if (side && side < end && attr_str(side, "type", typ, sizeof(typ)) && strcmp(typ, "NONE") != 0) {
+                br->right = 1;
+                attr_str(side, "color", color, sizeof(color));
+                br->color_right = parse_color(color);
+                if (attr_str(side, "width", width, sizeof(width))) {
+                    br->width_px = border_width_to_px(width);
+                }
+            }
+            side = find_tag_open(p, "topBorder");
+            if (side && side < end && attr_str(side, "type", typ, sizeof(typ)) && strcmp(typ, "NONE") != 0) {
+                br->top = 1;
+                attr_str(side, "color", color, sizeof(color));
+                br->color_top = parse_color(color);
+                if (attr_str(side, "width", width, sizeof(width))) {
+                    br->width_px = border_width_to_px(width);
+                }
+            }
+            side = find_tag_open(p, "bottomBorder");
+            if (side && side < end && attr_str(side, "type", typ, sizeof(typ)) && strcmp(typ, "NONE") != 0) {
+                br->bottom = 1;
+                attr_str(side, "color", color, sizeof(color));
+                br->color_bottom = parse_color(color);
+                if (attr_str(side, "width", width, sizeof(width))) {
+                    br->width_px = border_width_to_px(width);
+                }
+            }
+            if (br->left || br->right || br->top || br->bottom) {
+                br->valid = 1;
             }
         }
         p = end;
@@ -582,6 +755,75 @@ static void apply_char_style(hp_run *run, const hp_style_tables *st, int char_id
     }
 }
 
+static void apply_para_style(hp_paragraph *para, const hp_style_tables *st, int para_pr_id) {
+    if (!para) {
+        return;
+    }
+    para->align = HP_ALIGN_JUSTIFY;
+    para->indent_left_hwp = 0;
+    para->indent_right_hwp = 0;
+    para->indent_first_hwp = 0;
+    para->space_before_hwp = 0;
+    para->space_after_hwp = 0;
+    para->line_spacing_percent = 160;
+    if (!st || para_pr_id < 0 || para_pr_id >= HP_MAX_STYLE || !st->paras[para_pr_id].valid) {
+        return;
+    }
+    para->align = st->paras[para_pr_id].align;
+    para->indent_left_hwp = st->paras[para_pr_id].left_hwp;
+    para->indent_right_hwp = st->paras[para_pr_id].right_hwp;
+    para->indent_first_hwp = st->paras[para_pr_id].intent_hwp;
+    para->space_before_hwp = st->paras[para_pr_id].prev_hwp;
+    para->space_after_hwp = st->paras[para_pr_id].next_hwp;
+    para->line_spacing_percent =
+        st->paras[para_pr_id].line_spacing_percent > 0 ? st->paras[para_pr_id].line_spacing_percent : 160;
+}
+
+static void parse_linesegs(const char *p_open, const char *p_end, hp_paragraph *para) {
+    const char *q;
+    if (!para || !p_open || !p_end) {
+        return;
+    }
+    para->segs = NULL;
+    para->seg_count = 0;
+    q = p_open;
+    while (q < p_end && (q = find_tag_open(q, "lineseg")) != NULL && q < p_end) {
+        hp_line_seg seg;
+        hp_line_seg *arr;
+        const char *gt = find_close_gt(q);
+        memset(&seg, 0, sizeof(seg));
+        seg.textpos = (uint32_t)attr_int(q, "textpos", 0);
+        seg.vertpos_hwp = (uint32_t)attr_int(q, "vertpos", 0);
+        seg.vertsize_hwp = (uint32_t)attr_int(q, "vertsize", 0);
+        seg.textheight_hwp = (uint32_t)attr_int(q, "textheight", 0);
+        seg.spacing_hwp = (uint32_t)attr_int(q, "spacing", 0);
+        seg.horzpos_hwp = (uint32_t)attr_int(q, "horzpos", 0);
+        seg.horzsize_hwp = (uint32_t)attr_int(q, "horzsize", 0);
+        arr = (hp_line_seg *)realloc(para->segs, (para->seg_count + 1) * sizeof(hp_line_seg));
+        if (!arr) {
+            break;
+        }
+        para->segs = arr;
+        para->segs[para->seg_count++] = seg;
+        q = gt ? gt + 1 : q + 8;
+    }
+}
+
+static void apply_border_style(hp_table_cell *cell, const hp_style_tables *st, int fill_id) {
+    if (!cell || !st || fill_id < 0 || fill_id >= HP_MAX_FILL || !st->borders[fill_id].valid) {
+        return;
+    }
+    cell->borders.left = st->borders[fill_id].left;
+    cell->borders.right = st->borders[fill_id].right;
+    cell->borders.top = st->borders[fill_id].top;
+    cell->borders.bottom = st->borders[fill_id].bottom;
+    cell->borders.color_left = st->borders[fill_id].color_left;
+    cell->borders.color_right = st->borders[fill_id].color_right;
+    cell->borders.color_top = st->borders[fill_id].color_top;
+    cell->borders.color_bottom = st->borders[fill_id].color_bottom;
+    cell->borders.width_px = st->borders[fill_id].width_px > 0 ? st->borders[fill_id].width_px : 1;
+}
+
 static hp_status append_block(hp_section *sec, hp_block *blk) {
     hp_block *n = (hp_block *)realloc(sec->blocks, (sec->block_count + 1) * sizeof(*n));
     if (!n) {
@@ -606,6 +848,22 @@ static hp_status append_flat_para(hp_section *sec, const hp_paragraph *src) {
     }
     sec->paragraphs = paras;
     memset(&sec->paragraphs[sec->paragraph_count], 0, sizeof(hp_paragraph));
+    sec->paragraphs[sec->paragraph_count].align = src->align;
+    sec->paragraphs[sec->paragraph_count].indent_left_hwp = src->indent_left_hwp;
+    sec->paragraphs[sec->paragraph_count].indent_right_hwp = src->indent_right_hwp;
+    sec->paragraphs[sec->paragraph_count].indent_first_hwp = src->indent_first_hwp;
+    sec->paragraphs[sec->paragraph_count].space_before_hwp = src->space_before_hwp;
+    sec->paragraphs[sec->paragraph_count].space_after_hwp = src->space_after_hwp;
+    sec->paragraphs[sec->paragraph_count].line_spacing_percent = src->line_spacing_percent;
+    if (src->seg_count > 0 && src->segs) {
+        sec->paragraphs[sec->paragraph_count].segs =
+            (hp_line_seg *)malloc(src->seg_count * sizeof(hp_line_seg));
+        if (sec->paragraphs[sec->paragraph_count].segs) {
+            memcpy(sec->paragraphs[sec->paragraph_count].segs, src->segs,
+                   src->seg_count * sizeof(hp_line_seg));
+            sec->paragraphs[sec->paragraph_count].seg_count = src->seg_count;
+        }
+    }
     runs = (hp_run *)calloc(src->run_count, sizeof(hp_run));
     if (!runs) {
         return HP_ERR_NOMEM;
@@ -630,10 +888,8 @@ static hp_status parse_text_paragraph(const char *p_open, const char *p_end, con
     int para_pr_id;
     memset(out, 0, sizeof(*out));
     para_pr_id = attr_int(p_open, "paraPrIDRef", 0);
-    out->align = HP_ALIGN_JUSTIFY;
-    if (styles && para_pr_id >= 0 && para_pr_id < HP_MAX_STYLE && styles->paras[para_pr_id].valid) {
-        out->align = styles->paras[para_pr_id].align;
-    }
+    apply_para_style(out, styles, para_pr_id);
+    parse_linesegs(p_open, p_end, out);
     q = find_close_gt(p_open);
     if (!q) {
         return HP_OK;
@@ -1143,6 +1399,19 @@ static hp_table *parse_table(const char *tbl_open, const hp_style_tables *styles
                 cell.fill_rgb = styles->fill_rgb[fill_id];
                 cell.has_fill = 1;
             }
+            apply_border_style(&cell, styles, fill_id);
+            {
+                const char *cm = find_tag_open(tc, "cellMargin");
+                if (cm && cm < tc_end) {
+                    cell.pad_left_hwp = (uint32_t)attr_int(cm, "left", 140);
+                    cell.pad_right_hwp = (uint32_t)attr_int(cm, "right", 140);
+                    cell.pad_top_hwp = (uint32_t)attr_int(cm, "top", 140);
+                    cell.pad_bottom_hwp = (uint32_t)attr_int(cm, "bottom", 140);
+                } else {
+                    cell.pad_left_hwp = cell.pad_right_hwp = 140;
+                    cell.pad_top_hwp = cell.pad_bottom_hwp = 140;
+                }
+            }
             parse_cell_content(tc, tc_end, styles, &cell);
             arr = (hp_table_cell *)realloc(table->cells, (table->cell_count + 1) * sizeof(*arr));
             if (!arr) {
@@ -1169,9 +1438,23 @@ static hp_status parse_section_xml(const char *xml, hp_section *sec, const hp_st
     sec->paragraphs = NULL;
     sec->paragraph_count = 0;
 
-    /* 다단 from colPr */
+    /* page margins + 다단 */
     {
+        const char *pg = find_tag_open(xml, "pagePr");
         const char *col = find_tag_open(xml, "colPr");
+        if (pg) {
+            const char *pend = find_element_end(pg, "pagePr");
+            const char *mg;
+            sec->page.width = (uint32_t)attr_int(pg, "width", (int)sec->page.width);
+            sec->page.height = (uint32_t)attr_int(pg, "height", (int)sec->page.height);
+            mg = find_tag_open(pg, "margin");
+            if (mg && (!pend || mg < pend)) {
+                sec->page.margin_left = (uint32_t)attr_int(mg, "left", (int)sec->page.margin_left);
+                sec->page.margin_right = (uint32_t)attr_int(mg, "right", (int)sec->page.margin_right);
+                sec->page.margin_top = (uint32_t)attr_int(mg, "top", (int)sec->page.margin_top);
+                sec->page.margin_bottom = (uint32_t)attr_int(mg, "bottom", (int)sec->page.margin_bottom);
+            }
+        }
         if (col) {
             int cc = attr_int(col, "colCount", 1);
             if (cc < 1) {
@@ -1270,11 +1553,9 @@ static hp_status parse_section_xml(const char *xml, hp_section *sec, const hp_st
             }
             memset(&pending, 0, sizeof(pending));
             para_pr_id = attr_int(p, "paraPrIDRef", 0);
-            if (styles && para_pr_id >= 0 && para_pr_id < HP_MAX_STYLE &&
-                styles->paras[para_pr_id].valid) {
-                align = styles->paras[para_pr_id].align;
-            }
-            pending.align = align;
+            apply_para_style(&pending, styles, para_pr_id);
+            parse_linesegs(p, pend, &pending);
+            align = pending.align;
             scan = find_close_gt(p);
             if (scan) {
                 scan++;
@@ -1300,7 +1581,7 @@ static hp_status parse_section_xml(const char *xml, hp_section *sec, const hp_st
                         append_flat_para(sec, &pending);
                         append_block(sec, &blk);
                         memset(&pending, 0, sizeof(pending));
-                        pending.align = align;
+                        apply_para_style(&pending, styles, para_pr_id);
                         emitted = 1;
                     }
                     {
@@ -1327,7 +1608,7 @@ static hp_status parse_section_xml(const char *xml, hp_section *sec, const hp_st
                         append_flat_para(sec, &pending);
                         append_block(sec, &blk);
                         memset(&pending, 0, sizeof(pending));
-                        pending.align = align;
+                        apply_para_style(&pending, styles, para_pr_id);
                         emitted = 1;
                     }
                     {
@@ -1354,7 +1635,7 @@ static hp_status parse_section_xml(const char *xml, hp_section *sec, const hp_st
                         append_flat_para(sec, &pending);
                         append_block(sec, &blk);
                         memset(&pending, 0, sizeof(pending));
-                        pending.align = align;
+                        apply_para_style(&pending, styles, para_pr_id);
                         emitted = 1;
                     }
                     {
@@ -1381,7 +1662,7 @@ static hp_status parse_section_xml(const char *xml, hp_section *sec, const hp_st
                         append_flat_para(sec, &pending);
                         append_block(sec, &blk);
                         memset(&pending, 0, sizeof(pending));
-                        pending.align = align;
+                        apply_para_style(&pending, styles, para_pr_id);
                         emitted = 1;
                     }
                     {

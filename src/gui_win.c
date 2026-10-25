@@ -96,14 +96,45 @@ static char *wide_to_utf8(const wchar_t *w) {
 }
 
 static void map_face(const char *hw, wchar_t *out, size_t out_n) {
-    if (!hw || !hw[0]) {
-        wcsncpy(out, L"Malgun Gothic", out_n - 1);
-    } else if (strstr(hw, "바탕") || strstr(hw, "명조") || strstr(hw, "신명조")) {
-        wcsncpy(out, L"Batang", out_n - 1);
-    } else {
+    wchar_t *native = NULL;
+    out[0] = 0;
+    if (hw && hw[0]) {
+        native = utf8_to_wide(hw);
+        /* Prefer document face name when Windows has it (함초롬/HY 등). */
+        if (native && native[0]) {
+            if (wcsstr(native, L"바탕") || wcsstr(native, L"명조") || wcsstr(native, L"신명조") ||
+                wcsstr(native, L"Batang")) {
+                wcsncpy(out, L"Batang", out_n - 1);
+            } else if (wcsstr(native, L"고딕") || wcsstr(native, L"돋움") || wcsstr(native, L"Gothic") ||
+                       wcsstr(native, L"헤드라인") || wcsstr(native, L"Poppy") ||
+                       wcsstr(native, L"스마트")) {
+                wcsncpy(out, L"Malgun Gothic", out_n - 1);
+            } else {
+                wcsncpy(out, native, out_n - 1);
+            }
+        }
+        free(native);
+    }
+    if (!out[0]) {
         wcsncpy(out, L"Malgun Gothic", out_n - 1);
     }
     out[out_n - 1] = 0;
+}
+
+static int para_line_pitch_px(const hp_paragraph *para, int font_px) {
+    int pct = para && para->line_spacing_percent > 0 ? para->line_spacing_percent : 160;
+    int pitch = font_px * pct / 100;
+    if (pitch < font_px + 2) {
+        pitch = font_px + 2;
+    }
+    return pitch;
+}
+
+static int hwp_px_i(int32_t hwp) {
+    if (hwp >= 0) {
+        return (int)hp_hwp_to_px((uint32_t)hwp);
+    }
+    return -(int)hp_hwp_to_px((uint32_t)(-hwp));
 }
 
 static HFONT make_font(HDC hdc, const hp_run *run) {
@@ -133,7 +164,7 @@ static HFONT make_font(HDC hdc, const hp_run *run) {
 static void update_status(void) {
     wchar_t buf[200];
     if (g_doc && g_page_count > 0) {
-        swprintf(buf, 200, L"페이지 %d / %d  —  엔진 렌더 (표·이미지·수식·떠있는개체)", g_page_index + 1,
+        swprintf(buf, 200, L"페이지 %d / %d  —  엔진 렌더 (들여쓰기·행간·테두리·폰트)", g_page_index + 1,
                  g_page_count);
     } else {
         wcscpy(buf, L"파일 → 열기 또는 샘플 문서 열기");
@@ -193,11 +224,38 @@ static int measure_para_height(HDC hdc, const hp_paragraph *para, int content_w)
     int max_line = 14;
     int lines = 1;
     int x = 0;
-    if (!para || para_is_blank(para)) {
-        if (para && para->run_count && para->runs[0].font_size_hwp) {
-            return (int)(para->runs[0].font_size_hwp / 100) + 4;
+    int left_pad, right_pad, width;
+    int before, after;
+    if (!para) {
+        return 8;
+    }
+    before = hwp_px_i(para->space_before_hwp);
+    after = hwp_px_i(para->space_after_hwp);
+    if (para->seg_count > 0) {
+        const hp_line_seg *last = &para->segs[para->seg_count - 1];
+        int h = hwp_px_i((int32_t)(last->vertpos_hwp + last->textheight_hwp + last->spacing_hwp));
+        if (h < 8) {
+            h = 8;
         }
-        return 10;
+        return before + h + after;
+    }
+    left_pad = hwp_px_i(para->indent_left_hwp);
+    right_pad = hwp_px_i(para->indent_right_hwp);
+    if (left_pad < 0) {
+        left_pad = 0;
+    }
+    if (right_pad < 0) {
+        right_pad = 0;
+    }
+    width = content_w - left_pad - right_pad;
+    if (width < 20) {
+        width = 20;
+    }
+    if (para_is_blank(para)) {
+        int fp = para->run_count && para->runs[0].font_size_hwp
+                     ? (int)hp_hwp_to_px(para->runs[0].font_size_hwp)
+                     : 14;
+        return before + para_line_pitch_px(para, fp) / 2 + after;
     }
     for (ri = 0; ri < para->run_count; ri++) {
         const hp_run *run = &para->runs[ri];
@@ -206,6 +264,7 @@ static int measure_para_height(HDC hdc, const hp_paragraph *para, int content_w)
         TEXTMETRICW tm;
         SIZE sz;
         int i, len;
+        int first_extra = (ri == 0) ? hwp_px_i(para->indent_first_hwp) : 0;
         if (!run->text || !run->text[0]) {
             continue;
         }
@@ -221,8 +280,12 @@ static int measure_para_height(HDC hdc, const hp_paragraph *para, int content_w)
         }
         len = (int)wcslen(w);
         for (i = 0; i < len; i++) {
+            int limit = width - ((lines == 1) ? first_extra : 0);
+            if (limit < 20) {
+                limit = 20;
+            }
             GetTextExtentPoint32W(hdc, &w[i], 1, &sz);
-            if (x + sz.cx > content_w && x > 0) {
+            if (x + sz.cx > limit && x > 0) {
                 lines++;
                 x = 0;
             }
@@ -232,7 +295,7 @@ static int measure_para_height(HDC hdc, const hp_paragraph *para, int content_w)
         DeleteObject(font);
         free(w);
     }
-    return lines * max_line + 4;
+    return before + lines * para_line_pitch_px(para, max_line) + after;
 }
 
 static HBITMAP decode_image_mem(const unsigned char *data, size_t len, int *out_w, int *out_h) {
@@ -468,15 +531,63 @@ static int measure_block_height(HDC hdc, const hp_block *b, int content_w) {
     return 8;
 }
 
+static void page_metrics(int *out_ml, int *out_mr, int *out_mt, int *out_mb, int *out_cw, int *out_ch) {
+    int ml = MARGIN_X, mr = MARGIN_X, mt = MARGIN_Y, mb = MARGIN_Y;
+    if (g_doc && g_doc->section_count > 0) {
+        const hp_page *pg = &g_doc->sections[0].page;
+        if (pg->margin_left) {
+            ml = (int)hp_hwp_to_px(pg->margin_left);
+        }
+        if (pg->margin_right) {
+            mr = (int)hp_hwp_to_px(pg->margin_right);
+        }
+        if (pg->margin_top) {
+            mt = (int)hp_hwp_to_px(pg->margin_top);
+        }
+        if (pg->margin_bottom) {
+            mb = (int)hp_hwp_to_px(pg->margin_bottom);
+        }
+        /* header/footer band approx */
+        if (mt < 40) {
+            mt = 40;
+        }
+        if (mb < 40) {
+            mb = 40;
+        }
+    }
+    if (out_ml) {
+        *out_ml = ml;
+    }
+    if (out_mr) {
+        *out_mr = mr;
+    }
+    if (out_mt) {
+        *out_mt = mt;
+    }
+    if (out_mb) {
+        *out_mb = mb;
+    }
+    if (out_cw) {
+        *out_cw = PAGE_W_PX - ml - mr;
+    }
+    if (out_ch) {
+        *out_ch = PAGE_H_PX - mt - mb;
+    }
+}
+
 static void rebuild_pages(HWND hwnd) {
     HDC hdc;
-    int content_w = PAGE_W_PX - 2 * MARGIN_X;
-    int content_h = PAGE_H_PX - 2 * MARGIN_Y;
+    int ml, mr, mt, mb, content_w, content_h;
     int y = 0;
     int i;
     int page_first = 0;
     int cols = 1;
 
+    page_metrics(&ml, &mr, &mt, &mb, &content_w, &content_h);
+    (void)ml;
+    (void)mr;
+    (void)mt;
+    (void)mb;
     g_page_count = 0;
     if (g_flat_count == 0) {
         return;
@@ -515,23 +626,158 @@ static void rebuild_pages(HWND hwnd) {
     }
 }
 
+static wchar_t *para_concat_wide(const hp_paragraph *para) {
+    size_t cap = 64, len = 0, ri;
+    wchar_t *all = (wchar_t *)malloc(cap * sizeof(wchar_t));
+    if (!all) {
+        return NULL;
+    }
+    all[0] = 0;
+    for (ri = 0; ri < para->run_count; ri++) {
+        wchar_t *w;
+        size_t n;
+        if (!para->runs[ri].text || !para->runs[ri].text[0]) {
+            continue;
+        }
+        w = utf8_to_wide(para->runs[ri].text);
+        if (!w) {
+            continue;
+        }
+        n = wcslen(w);
+        while (len + n + 1 > cap) {
+            wchar_t *nw;
+            cap *= 2;
+            nw = (wchar_t *)realloc(all, cap * sizeof(wchar_t));
+            if (!nw) {
+                free(w);
+                free(all);
+                return NULL;
+            }
+            all = nw;
+        }
+        memcpy(all + len, w, (n + 1) * sizeof(wchar_t));
+        len += n;
+        free(w);
+    }
+    return all;
+}
+
+static const hp_run *run_at_char(const hp_paragraph *para, size_t char_index, size_t *out_local) {
+    size_t ri, at = 0;
+    for (ri = 0; ri < para->run_count; ri++) {
+        wchar_t *w;
+        size_t n;
+        if (!para->runs[ri].text) {
+            continue;
+        }
+        w = utf8_to_wide(para->runs[ri].text);
+        if (!w) {
+            continue;
+        }
+        n = wcslen(w);
+        free(w);
+        if (char_index < at + n) {
+            if (out_local) {
+                *out_local = char_index - at;
+            }
+            return &para->runs[ri];
+        }
+        at += n;
+    }
+    return para->run_count ? &para->runs[0] : NULL;
+}
+
 static void draw_para(HDC hdc, const hp_paragraph *para, int left, int right, int *y) {
     size_t ri;
-    int content_w = right - left;
-    int x = left;
-    int line_top = *y;
-    int line_h = 14;
+    int indent_l, indent_r, indent_first;
+    int box_left, box_right, width;
+    int x, line_top, line_h, pitch;
     int first_on_line = 1;
+    int line_index = 0;
     hp_align align;
-    SIZE total;
 
     if (!para) {
         return;
     }
+    *y += hwp_px_i(para->space_before_hwp);
+    indent_l = hwp_px_i(para->indent_left_hwp);
+    indent_r = hwp_px_i(para->indent_right_hwp);
+    indent_first = hwp_px_i(para->indent_first_hwp);
+    if (indent_l < 0) {
+        indent_l = 0;
+    }
+    if (indent_r < 0) {
+        indent_r = 0;
+    }
+    box_left = left + indent_l;
+    box_right = right - indent_r;
+    if (box_right - box_left < 20) {
+        box_right = box_left + 20;
+    }
+    width = box_right - box_left;
+
     if (para_is_blank(para)) {
-        *y += (para->run_count && para->runs[0].font_size_hwp) ? (int)(para->runs[0].font_size_hwp / 100) + 4 : 10;
+        int fp = para->run_count && para->runs[0].font_size_hwp ? (int)hp_hwp_to_px(para->runs[0].font_size_hwp) : 14;
+        *y += para_line_pitch_px(para, fp) / 2 + hwp_px_i(para->space_after_hwp);
         return;
     }
+
+    /* Prefer Hangul-saved lineseg geometry when present. */
+    if (para->seg_count > 0) {
+        wchar_t *all = para_concat_wide(para);
+        size_t si;
+        int base = *y;
+        int bottom = *y;
+        if (!all) {
+            *y += 12;
+            return;
+        }
+        for (si = 0; si < para->seg_count; si++) {
+            const hp_line_seg *seg = &para->segs[si];
+            uint32_t start = seg->textpos;
+            uint32_t end =
+                (si + 1 < para->seg_count) ? para->segs[si + 1].textpos : (uint32_t)wcslen(all);
+            int lx = box_left + (int)hp_hwp_to_px(seg->horzpos_hwp);
+            int ly = base + (int)hp_hwp_to_px(seg->vertpos_hwp);
+            uint32_t ci;
+            if (end > (uint32_t)wcslen(all)) {
+                end = (uint32_t)wcslen(all);
+            }
+            for (ci = start; ci < end; ci++) {
+                size_t local = 0;
+                const hp_run *run = run_at_char(para, ci, &local);
+                HFONT font, old;
+                COLORREF col;
+                SIZE sz;
+                hp_run fallback;
+                if (!run) {
+                    memset(&fallback, 0, sizeof(fallback));
+                    fallback.font_size_hwp = 1000;
+                    run = &fallback;
+                }
+                font = make_font(hdc, run);
+                old = (HFONT)SelectObject(hdc, font);
+                col = RGB((run->color_rgb >> 16) & 255, (run->color_rgb >> 8) & 255, run->color_rgb & 255);
+                SetTextColor(hdc, col);
+                SetBkMode(hdc, TRANSPARENT);
+                GetTextExtentPoint32W(hdc, &all[ci], 1, &sz);
+                TextOutW(hdc, lx, ly, &all[ci], 1);
+                lx += sz.cx;
+                SelectObject(hdc, old);
+                DeleteObject(font);
+            }
+            {
+                int line_bottom = ly + (int)hp_hwp_to_px(seg->textheight_hwp + seg->spacing_hwp);
+                if (line_bottom > bottom) {
+                    bottom = line_bottom;
+                }
+            }
+        }
+        free(all);
+        *y = bottom + hwp_px_i(para->space_after_hwp);
+        return;
+    }
+
     align = para->align;
     if (align == HP_ALIGN_JUSTIFY && para->run_count > 0) {
         uint32_t sz = para->runs[0].font_size_hwp;
@@ -549,7 +795,13 @@ static void draw_para(HDC hdc, const hp_paragraph *para, int left, int right, in
         }
     }
 
+    line_top = *y;
+    line_h = 14;
+    pitch = para_line_pitch_px(para, line_h);
+    x = box_left + indent_first;
+
     if (align == HP_ALIGN_CENTER || align == HP_ALIGN_RIGHT) {
+        SIZE total;
         total.cx = 0;
         for (ri = 0; ri < para->run_count; ri++) {
             wchar_t *w;
@@ -566,12 +818,16 @@ static void draw_para(HDC hdc, const hp_paragraph *para, int left, int right, in
             old = (HFONT)SelectObject(hdc, font);
             GetTextExtentPoint32W(hdc, w, (int)wcslen(w), &sz);
             total.cx += sz.cx;
+            if (sz.cy > line_h) {
+                line_h = sz.cy;
+            }
             SelectObject(hdc, old);
             DeleteObject(font);
             free(w);
         }
-        if (total.cx > 0 && total.cx <= content_w) {
-            x = (align == HP_ALIGN_CENTER) ? left + (content_w - total.cx) / 2 : right - total.cx;
+        pitch = para_line_pitch_px(para, line_h);
+        if (total.cx > 0 && total.cx <= width) {
+            x = (align == HP_ALIGN_CENTER) ? box_left + (width - total.cx) / 2 : box_right - total.cx;
             for (ri = 0; ri < para->run_count; ri++) {
                 wchar_t *w;
                 HFONT font, old;
@@ -593,17 +849,14 @@ static void draw_para(HDC hdc, const hp_paragraph *para, int left, int right, in
                 GetTextExtentPoint32W(hdc, w, (int)wcslen(w), &sz);
                 TextOutW(hdc, x, line_top, w, (int)wcslen(w));
                 x += sz.cx;
-                if (sz.cy > line_h) {
-                    line_h = sz.cy;
-                }
                 SelectObject(hdc, old);
                 DeleteObject(font);
                 free(w);
             }
-            *y = line_top + line_h + 4;
+            *y = line_top + pitch + hwp_px_i(para->space_after_hwp);
             return;
         }
-        x = left;
+        x = box_left + indent_first;
     }
 
     for (ri = 0; ri < para->run_count; ri++) {
@@ -625,6 +878,7 @@ static void draw_para(HDC hdc, const hp_paragraph *para, int left, int right, in
         GetTextMetricsW(hdc, &tm);
         if (tm.tmHeight + tm.tmExternalLeading > line_h) {
             line_h = tm.tmHeight + tm.tmExternalLeading;
+            pitch = para_line_pitch_px(para, line_h);
         }
         col = RGB((run->color_rgb >> 16) & 255, (run->color_rgb >> 8) & 255, run->color_rgb & 255);
         SetTextColor(hdc, col);
@@ -632,11 +886,12 @@ static void draw_para(HDC hdc, const hp_paragraph *para, int left, int right, in
         len = (int)wcslen(w);
         for (i = 0; i < len; i++) {
             SIZE sz;
+            int limit = box_right;
             GetTextExtentPoint32W(hdc, &w[i], 1, &sz);
-            if (!first_on_line && x + sz.cx > right) {
-                line_top += line_h;
-                x = left;
-                line_h = tm.tmHeight + tm.tmExternalLeading;
+            if (!first_on_line && x + sz.cx > limit) {
+                line_top += pitch;
+                line_index++;
+                x = box_left;
                 first_on_line = 1;
             }
             TextOutW(hdc, x, line_top, &w[i], 1);
@@ -647,7 +902,7 @@ static void draw_para(HDC hdc, const hp_paragraph *para, int left, int right, in
         DeleteObject(font);
         free(w);
     }
-    *y = line_top + line_h + 4;
+    *y = line_top + pitch + hwp_px_i(para->space_after_hwp);
 }
 
 static int hwp_delta_px(int32_t hwp) {
@@ -832,24 +1087,29 @@ static void draw_table(HDC hdc, const hp_table *t, int left, int right, int *y) 
             continue;
         }
         cw = col_w[cell->col];
-        if (cell->image) {
-            int ih = measure_image_height(cell->image, cw > 8 ? cw - 8 : cw);
-            if (ih > ch) {
-                ch = ih;
+        {
+            int pad_x = (int)hp_hwp_to_px(cell->pad_left_hwp + cell->pad_right_hwp);
+            int pad_y = (int)hp_hwp_to_px(cell->pad_top_hwp + cell->pad_bottom_hwp);
+            int inner = cw > pad_x + 4 ? cw - pad_x : (cw > 8 ? cw - 8 : cw);
+            int content_h = pad_y;
+            if (cell->image) {
+                content_h += measure_image_height(cell->image, inner);
             }
-        }
-        if (cell->container) {
-            ch += measure_container_height(cell->container, cw > 8 ? cw - 8 : cw);
-        }
-        if (cell->equation) {
-            ch += measure_equation_height(cell->equation);
-        }
-        for (p = 0; p < cell->paragraph_count; p++) {
-            int th = measure_para_height(hdc, &cell->paragraphs[p], cw > 8 ? cw - 8 : cw);
-            ch += th;
-        }
-        for (n = 0; n < cell->nested_table_count; n++) {
-            ch += measure_table_height(hdc, cell->nested_tables[n], cw > 8 ? cw - 8 : cw);
+            if (cell->container) {
+                content_h += measure_container_height(cell->container, inner);
+            }
+            if (cell->equation) {
+                content_h += measure_equation_height(cell->equation);
+            }
+            for (p = 0; p < cell->paragraph_count; p++) {
+                content_h += measure_para_height(hdc, &cell->paragraphs[p], inner);
+            }
+            for (n = 0; n < cell->nested_table_count; n++) {
+                content_h += measure_table_height(hdc, cell->nested_tables[n], inner);
+            }
+            if (content_h > ch) {
+                ch = content_h;
+            }
         }
         if (ch < 20) {
             ch = 20;
@@ -866,8 +1126,6 @@ static void draw_table(HDC hdc, const hp_table *t, int left, int right, int *y) 
 
     {
         int yy = *y;
-        HPEN pen = CreatePen(PS_SOLID, 1, RGB(60, 60, 60));
-        HGDIOBJ oldpen = SelectObject(hdc, pen);
         for (i = 0; i < t->cell_count; i++) {
             const hp_table_cell *cell = &t->cells[i];
             int cx, cy, cw, ch;
@@ -899,29 +1157,91 @@ static void draw_table(HDC hdc, const hp_table *t, int left, int right, int *y) 
                 FillRect(hdc, &rc, br);
                 DeleteObject(br);
             }
-            Rectangle(hdc, cx, cy, cx + cw, cy + ch);
             {
-                int ty = cy + 3;
+                int bw = cell->borders.width_px > 0 ? cell->borders.width_px : 1;
+                int has_b =
+                    cell->borders.left || cell->borders.right || cell->borders.top || cell->borders.bottom;
+                if (has_b) {
+                    if (cell->borders.top) {
+                        HPEN pen = CreatePen(PS_SOLID, bw,
+                                             RGB((cell->borders.color_top >> 16) & 255,
+                                                 (cell->borders.color_top >> 8) & 255,
+                                                 cell->borders.color_top & 255));
+                        HGDIOBJ op = SelectObject(hdc, pen);
+                        MoveToEx(hdc, cx, cy, NULL);
+                        LineTo(hdc, cx + cw, cy);
+                        SelectObject(hdc, op);
+                        DeleteObject(pen);
+                    }
+                    if (cell->borders.bottom) {
+                        HPEN pen = CreatePen(PS_SOLID, bw,
+                                             RGB((cell->borders.color_bottom >> 16) & 255,
+                                                 (cell->borders.color_bottom >> 8) & 255,
+                                                 cell->borders.color_bottom & 255));
+                        HGDIOBJ op = SelectObject(hdc, pen);
+                        MoveToEx(hdc, cx, cy + ch - 1, NULL);
+                        LineTo(hdc, cx + cw, cy + ch - 1);
+                        SelectObject(hdc, op);
+                        DeleteObject(pen);
+                    }
+                    if (cell->borders.left) {
+                        HPEN pen = CreatePen(PS_SOLID, bw,
+                                             RGB((cell->borders.color_left >> 16) & 255,
+                                                 (cell->borders.color_left >> 8) & 255,
+                                                 cell->borders.color_left & 255));
+                        HGDIOBJ op = SelectObject(hdc, pen);
+                        MoveToEx(hdc, cx, cy, NULL);
+                        LineTo(hdc, cx, cy + ch);
+                        SelectObject(hdc, op);
+                        DeleteObject(pen);
+                    }
+                    if (cell->borders.right) {
+                        HPEN pen = CreatePen(PS_SOLID, bw,
+                                             RGB((cell->borders.color_right >> 16) & 255,
+                                                 (cell->borders.color_right >> 8) & 255,
+                                                 cell->borders.color_right & 255));
+                        HGDIOBJ op = SelectObject(hdc, pen);
+                        MoveToEx(hdc, cx + cw - 1, cy, NULL);
+                        LineTo(hdc, cx + cw - 1, cy + ch);
+                        SelectObject(hdc, op);
+                        DeleteObject(pen);
+                    }
+                } else {
+                    /* Fallback hairline so structure remains visible */
+                    HPEN pen = CreatePen(PS_SOLID, 1, RGB(160, 160, 160));
+                    HGDIOBJ op = SelectObject(hdc, pen);
+                    HGDIOBJ obr = SelectObject(hdc, GetStockObject(NULL_BRUSH));
+                    Rectangle(hdc, cx, cy, cx + cw, cy + ch);
+                    SelectObject(hdc, obr);
+                    SelectObject(hdc, op);
+                    DeleteObject(pen);
+                }
+            }
+            {
+                int pad_l = (int)hp_hwp_to_px(cell->pad_left_hwp);
+                int pad_r = (int)hp_hwp_to_px(cell->pad_right_hwp);
+                int pad_t = (int)hp_hwp_to_px(cell->pad_top_hwp);
+                int ty = cy + (pad_t > 0 ? pad_t : 3);
+                int cl = cx + (pad_l > 0 ? pad_l : 4);
+                int cr = cx + cw - (pad_r > 0 ? pad_r : 4);
                 size_t n;
                 if (cell->image) {
-                    draw_image(hdc, cell->image, cx + 4, cx + cw - 4, &ty);
+                    draw_image(hdc, cell->image, cl, cr, &ty);
                 }
                 if (cell->container) {
-                    draw_container(hdc, cell->container, cx + 4, cx + cw - 4, &ty);
+                    draw_container(hdc, cell->container, cl, cr, &ty);
                 }
                 if (cell->equation) {
-                    draw_equation(hdc, cell->equation, cx + 4, cx + cw - 4, &ty);
+                    draw_equation(hdc, cell->equation, cl, cr, &ty);
                 }
                 for (p = 0; p < cell->paragraph_count; p++) {
-                    draw_para(hdc, &cell->paragraphs[p], cx + 4, cx + cw - 4, &ty);
+                    draw_para(hdc, &cell->paragraphs[p], cl, cr, &ty);
                 }
                 for (n = 0; n < cell->nested_table_count; n++) {
-                    draw_table(hdc, cell->nested_tables[n], cx + 4, cx + cw - 4, &ty);
+                    draw_table(hdc, cell->nested_tables[n], cl, cr, &ty);
                 }
             }
         }
-        SelectObject(hdc, oldpen);
-        DeleteObject(pen);
         for (r = 0; r < rows; r++) {
             yy += row_h[r];
         }
@@ -1003,38 +1323,42 @@ static void paint_document(HWND hwnd) {
     }
     {
         layout_page *pg = &g_pages[g_page_index];
-        int y = MARGIN_Y;
+        int ml, mr, mt, mb, content_w, content_h;
+        int y;
         int i;
         int cols = 1;
         int gap = 16;
-        int col_w = PAGE_W_PX - 2 * MARGIN_X;
+        int col_w;
+        page_metrics(&ml, &mr, &mt, &mb, &content_w, &content_h);
+        y = mt;
+        col_w = content_w;
         if (g_doc->section_count > 0 && g_doc->sections[0].column_count > 1) {
             cols = g_doc->sections[0].column_count;
-            col_w = (PAGE_W_PX - 2 * MARGIN_X - (cols - 1) * gap) / cols;
+            col_w = (content_w - (cols - 1) * gap) / cols;
         }
         if (cols <= 1) {
             for (i = 0; i < pg->count; i++) {
-                draw_block(mem, flat_block(pg->first + i), MARGIN_X, PAGE_W_PX - MARGIN_X, &y);
-                if (y > PAGE_H_PX - MARGIN_Y / 2) {
+                draw_block(mem, flat_block(pg->first + i), ml, PAGE_W_PX - mr, &y);
+                if (y > PAGE_H_PX - mb / 2) {
                     break;
                 }
             }
         } else {
             /* Simple multi-column: fill column then next */
             int col = 0;
-            int col_top = MARGIN_Y;
+            int col_top = mt;
             y = col_top;
             for (i = 0; i < pg->count; i++) {
-                int left = MARGIN_X + col * (col_w + gap);
+                int left = ml + col * (col_w + gap);
                 int right = left + col_w;
                 int h = measure_block_height(mem, flat_block(pg->first + i), col_w);
-                if (y > col_top && y + h > PAGE_H_PX - MARGIN_Y) {
+                if (y > col_top && y + h > PAGE_H_PX - mb) {
                     col++;
                     if (col >= cols) {
                         break;
                     }
                     y = col_top;
-                    left = MARGIN_X + col * (col_w + gap);
+                    left = ml + col * (col_w + gap);
                     right = left + col_w;
                 }
                 draw_block(mem, flat_block(pg->first + i), left, right, &y);

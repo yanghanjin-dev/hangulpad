@@ -49,11 +49,42 @@ typedef struct hp_run {
     int bold;
 } hp_run;
 
+/* One line from hp:lineseg (Hangul-saved layout hint). */
+typedef struct hp_line_seg {
+    uint32_t textpos;       /* char index into concatenated paragraph text */
+    uint32_t vertpos_hwp;   /* offset from paragraph top */
+    uint32_t vertsize_hwp;
+    uint32_t textheight_hwp;
+    uint32_t spacing_hwp;   /* advance beyond textheight → line pitch */
+    uint32_t horzpos_hwp;
+    uint32_t horzsize_hwp;
+} hp_line_seg;
+
 typedef struct hp_paragraph {
     hp_run *runs;
     size_t run_count;
     hp_align align;
+    int32_t indent_left_hwp;
+    int32_t indent_right_hwp;
+    int32_t indent_first_hwp; /* first-line / hanging (intent) */
+    int32_t space_before_hwp;
+    int32_t space_after_hwp;
+    int line_spacing_percent; /* 160 = 160%; 0 → treat as 160 */
+    hp_line_seg *segs;
+    size_t seg_count;
 } hp_paragraph;
+
+typedef struct hp_borders {
+    int left;
+    int right;
+    int top;
+    int bottom; /* 1 = solid side */
+    uint32_t color_left;
+    uint32_t color_right;
+    uint32_t color_top;
+    uint32_t color_bottom;
+    int width_px;
+} hp_borders;
 
 typedef struct hp_image {
     char *binary_id;
@@ -81,6 +112,11 @@ typedef struct hp_table_cell {
     uint32_t height_hwp;
     uint32_t fill_rgb;
     int has_fill;
+    hp_borders borders;
+    uint32_t pad_left_hwp;
+    uint32_t pad_right_hwp;
+    uint32_t pad_top_hwp;
+    uint32_t pad_bottom_hwp;
     hp_paragraph *paragraphs;
     size_t paragraph_count;
     hp_image *image;

@@ -61,6 +61,9 @@ static void hp_paragraph_free(hp_paragraph *p) {
     free(p->runs);
     p->runs = NULL;
     p->run_count = 0;
+    free(p->segs);
+    p->segs = NULL;
+    p->seg_count = 0;
 }
 
 static void hp_image_free(hp_image *img);
