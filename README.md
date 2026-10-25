@@ -48,15 +48,20 @@ make install  # install to /usr/local/bin/hp (PREFIX=... optional)
 | `dist/hp` | Linux 배포용 (`make release`) |
 | `dist/hp.exe` | Windows x64 정적 빌드 (`make release-windows`) |
 | `dist/hp-windows-x86_64-portable.zip` | **DLL 포함 포터블 패키지** (권장) |
+| `dist/hangulpad-source.zip` | **소스 코드** (`make release-source`) |
 
-### Windows 포터블 다운로드 (HWPX 엔진 레이아웃)
+### 다운로드 (릴리스 v0.1.0-windows)
 
-- **다운로드:** https://github.com/yanghanjin-dev/hangulpad/releases/download/v0.1.0-windows/hp-windows-x86_64-portable.zip  
-- ZIP을 풀고 **`HangulPad.exe`** 실행 → HWPX를 **엔진으로 읽어** 글꼴·크기·표(중첩)·이미지·떠있는 개체·컨테이너·수식을 반영한 페이지 보기로 표시합니다 (그림 파일 슬라이드가 아님).  
+- **Windows 포터블:** https://github.com/yanghanjin-dev/hangulpad/releases/download/v0.1.0-windows/hp-windows-x86_64-portable.zip  
+- **소스 코드:** https://github.com/yanghanjin-dev/hangulpad/releases/download/v0.1.0-windows/hangulpad-source.zip  
+- 또는 GitHub: https://github.com/yanghanjin-dev/hangulpad/archive/refs/heads/cursor/layout-metrics-fonts-956b.zip  
+
+ZIP을 풀고 **`HangulPad.exe`** 실행 → HWPX를 **엔진으로 읽어** 글꼴·크기·들여쓰기·행간·표(중첩)·이미지·떠있는 개체·컨테이너·수식을 반영한 페이지 보기로 표시합니다 (그림 파일 슬라이드가 아님).  
 - `documents/corpus/` 에 규제합리화·윤리·식약처 샘플 HWPX가 있습니다.  
 - 이전/다음, 방향키, PageUp/Down, 스페이스, 마우스 휠로 넘깁니다.  
 - `HangulPad.exe`와 DLL, `documents/` 를 함께 두세요.  
-- CLI: 같은 폴더의 `hp.exe`
+- CLI: 같은 폴더의 `hp.exe`  
+- 소스: `make` / `make release-windows-portable` (의존성: `libzip`, Windows는 MinGW)
 
 ```bat
 HangulPad.exe

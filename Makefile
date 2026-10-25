@@ -10,7 +10,7 @@ VERSION ?= 0.1.0
 LIB_SRCS := src/common.c src/ir.c src/hwpx_read.c src/hwpx_write.c src/hwp.c
 LIB_OBJS := $(LIB_SRCS:src/%.c=build/%.o)
 
-.PHONY: all clean test cli check release release-windows release-windows-portable install uninstall dist
+.PHONY: all clean test cli check release release-windows release-windows-portable release-source install uninstall dist
 
 all: cli test
 
@@ -19,6 +19,14 @@ build:
 
 dist:
 	mkdir -p dist
+
+# Source tree zip for download (git HEAD → dist/hangulpad-source.zip)
+release-source: dist/hangulpad-source.zip
+dist/hangulpad-source.zip: | dist
+	git archive --format=zip --prefix=hangulpad/ -o dist/hangulpad-source.zip HEAD
+	@cp -f dist/hangulpad-source.zip "dist/한글패드-소스코드.zip"
+	@echo "source: $$(pwd)/dist/hangulpad-source.zip"
+	@ls -la dist/hangulpad-source.zip "dist/한글패드-소스코드.zip"
 
 build/%.o: src/%.c | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
