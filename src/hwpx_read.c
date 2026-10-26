@@ -24,6 +24,7 @@ typedef struct {
     uint32_t color_rgb;
     int bold;
     int italic, underline, strikeout;
+    int use_font_space;
     int font_ids[7];
     int width_percent[7];
     int spacing_percent[7];
@@ -47,11 +48,13 @@ typedef struct {
     int right;
     int top;
     int bottom;
+    hp_border_line style_left,style_right,style_top,style_bottom;
     uint32_t color_left;
     uint32_t color_right;
     uint32_t color_top;
     uint32_t color_bottom;
     int width_px;
+    int width_left, width_right, width_top, width_bottom;
     int valid;
     uint32_t fill_rgb;
     int fill_valid;
@@ -187,6 +190,16 @@ static hp_align parse_align_name(const char *a) {
     return HP_ALIGN_JUSTIFY; /* DISTRIBUTE / JUSTIFY */
 }
 
+static hp_border_line border_line_style(const char *s){
+    if(!s)return HP_BORDER_SOLID;
+    if(strcmp(s,"DASH")==0)return HP_BORDER_DASH;
+    if(strcmp(s,"DOT")==0)return HP_BORDER_DOT;
+    if(strcmp(s,"DASH_DOT")==0)return HP_BORDER_DASH_DOT;
+    if(strcmp(s,"DASH_DOT_DOT")==0)return HP_BORDER_DASH_DOT_DOT;
+    if(strcmp(s,"LONG_DASH")==0)return HP_BORDER_LONG_DASH;
+    if(strcmp(s,"DOUBLE_SLIM")==0)return HP_BORDER_DOUBLE_SLIM;
+    return HP_BORDER_SOLID;
+}
 static int border_width_to_px(const char *w) {
     double mm = 0.12;
     int px;
@@ -235,10 +248,12 @@ static void sb_putn(sbuf *b, const char *s, size_t n) {
     if (b->oom) {
         return;
     }
+    if (n > SIZE_MAX-b->len-1) {b->oom=1;return;}
     if (b->len + n + 1 > b->cap) {
         size_t cap = b->cap ? b->cap : 64;
         char *g;
         while (b->len + n + 1 > cap) {
+            if(cap>SIZE_MAX/2){cap=b->len+n+1;break;}
             cap *= 2;
         }
         g = (char *)realloc(b->s, cap);
@@ -330,6 +345,7 @@ static void parse_header_styles(const hp_xml_node *root, hp_style_tables *st) {
         cs->font_size_hwp = (uint32_t)attr_l(n, "height", 1000);
         cs->color_rgb = parse_color(hp_xml_attr(n, "textColor"));
         cs->bold = hp_xml_find(n, "bold") != NULL;
+        cs->use_font_space = attr_l(n,"useFontSpace",0) != 0;
         cs->italic = hp_xml_child(n,"italic") != NULL;
         {
             const hp_xml_node *u=hp_xml_child(n,"underline"),*s=hp_xml_child(n,"strikeout");
@@ -437,18 +453,26 @@ static void parse_header_styles(const hp_xml_node *root, hp_style_tables *st) {
             switch (i) {
             case 0:
                 br->left = 1;
+                br->style_left = border_line_style(type);
+                br->width_left = border_width_to_px(hp_xml_attr(side, "width"));
                 br->color_left = color;
                 break;
             case 1:
                 br->right = 1;
+                br->style_right = border_line_style(type);
+                br->width_right = border_width_to_px(hp_xml_attr(side, "width"));
                 br->color_right = color;
                 break;
             case 2:
                 br->top = 1;
+                br->style_top = border_line_style(type);
+                br->width_top = border_width_to_px(hp_xml_attr(side, "width"));
                 br->color_top = color;
                 break;
             default:
                 br->bottom = 1;
+                br->style_bottom = border_line_style(type);
+                br->width_bottom = border_width_to_px(hp_xml_attr(side, "width"));
                 br->color_bottom = color;
                 break;
             }
@@ -521,6 +545,7 @@ static void apply_char_style(hp_run *run, const hp_style_tables *st, long long c
     run->font_size_hwp = cs->font_size_hwp;
     run->color_rgb = cs->color_rgb;
     run->bold = cs->bold;
+    run->use_font_space = cs->use_font_space;
     run->italic=cs->italic;run->underline=cs->underline;run->strikeout=cs->strikeout;
     memcpy(run->width_percent, cs->width_percent, sizeof(run->width_percent));
     memcpy(run->spacing_percent, cs->spacing_percent, sizeof(run->spacing_percent));
@@ -572,9 +597,17 @@ static void apply_border_style(hp_table_cell *cell, const hp_style_tables *st, l
         return;
     }
     cell->borders.left = b->left;
+    cell->borders.style_left = b->style_left;
+    cell->borders.width_left = b->width_left;
     cell->borders.right = b->right;
+    cell->borders.style_right = b->style_right;
+    cell->borders.width_right = b->width_right;
     cell->borders.top = b->top;
+    cell->borders.style_top = b->style_top;
+    cell->borders.width_top = b->width_top;
     cell->borders.bottom = b->bottom;
+    cell->borders.style_bottom = b->style_bottom;
+    cell->borders.width_bottom = b->width_bottom;
     cell->borders.color_left = b->color_left;
     cell->borders.color_right = b->color_right;
     cell->borders.color_top = b->color_top;
@@ -858,6 +891,26 @@ static hp_status add_child_text(hp_paragraph *para, const hp_xml_node *child, co
                                 long long char_id, int keep_empty, int beside_object) {
     hp_xml_node *t;
     if (hp_xml_is(child, "t")) {
+        if (hp_xml_child(child,"tab")) {
+            const hp_xml_node *part;
+            for(part=child->first_child;part;part=part->next) {
+                hp_status rc=HP_OK;
+                if(part->type==HP_XML_TEXT) {
+                    sbuf text={0};sb_putn(&text,part->text,part->text_len);
+                    rc=add_text_piece(para,sb_finish(&text),st,char_id,0);
+                } else if(hp_xml_is(part,"tab")) {
+                    rc=add_run(para,hp_strdup("\t"),st,char_id);
+                    if(rc==HP_OK){para->runs[para->run_count-1].tab_width_hwp=attr_u32(part,"width",0);
+                        para->runs[para->run_count-1].tab_leader=(int)attr_l(part,"leader",0);
+                        para->runs[para->run_count-1].tab_align_right=attr_l(part,"type",0)==2;}
+                } else if(hp_xml_is(part,"lineBreak") || hp_xml_is(part,"lb") || hp_xml_is(part,"fwSpace") || hp_xml_is(part,"nbSpace"))
+                    rc=add_text_piece(para,hp_strdup(" "),st,char_id,0);
+                else if(hp_xml_is(part,"hyphen"))rc=add_text_piece(para,hp_strdup("-"),st,char_id,0);
+                else rc=add_text_piece(para,element_text(part),st,char_id,0);
+                if(rc!=HP_OK)return rc;
+            }
+            return HP_OK;
+        }
         if (is_empty_element_tag(child)) {
             return keep_empty && !beside_object ? add_run(para, hp_strdup(""), st, char_id) : HP_OK;
         }
@@ -993,6 +1046,17 @@ static hp_table *parse_table(const hp_xml_node *tbl, const hp_style_tables *st) 
     table->repeat_header = attr_l(tbl, "repeatHeader", 0) != 0;
     parse_size(tbl, &table->width_hwp, &table->height_hwp, 0);
     parse_float_pos(tbl, &table->pos, &table->has_pos);
+    {
+        const hp_xml_node *anchor=tbl->parent,*margin=hp_xml_child(tbl,"outMargin");
+        table->outer_left_hwp=attr_u32(margin,"left",0);
+        table->outer_right_hwp=attr_u32(margin,"right",0);
+        while(anchor&&!hp_xml_is(anchor,"p"))anchor=anchor->parent;
+        if(anchor&&table->pos.treat_as_char){
+            hp_paragraph style={0};apply_para_style(&style,st,attr_l(anchor,"paraPrIDRef",0));
+            table->has_anchor_align=1;table->anchor_align=style.align;
+            table->anchor_left_hwp=style.indent_left_hwp;table->anchor_right_hwp=style.indent_right_hwp;
+        }
+    }
     for (tr = hp_xml_find(tbl, "tr"); tr; tr = hp_xml_find_after(tbl, tr, "tr")) {
         for (tc = hp_xml_find(tr, "tc"); tc; tc = hp_xml_find_after(tr, tc, "tc")) {
             hp_table_cell cell;
@@ -1223,6 +1287,13 @@ static hp_status parse_section(const hp_xml_node *root, hp_section *sec, const h
     hp_page_default(&sec->page);
     sec->column_count = 1;
     sec->column_gap_hwp = 0;
+    sec->page_number_position=-1;
+    {
+        const hp_xml_node *pr=hp_xml_find(root,"secPr");
+        long long start=attr_l(hp_xml_child(pr,"startNum"),"page",0);
+        sec->page_number_start=start>0 && start<=1000000 ? (int)start : 0;
+        sec->hide_first_page_number=attr_l(hp_xml_child(pr,"visibility"),"hideFirstPageNum",0)!=0;
+    }
 
     pg = hp_xml_find(root, "pagePr");
     if (pg) {
@@ -1257,10 +1328,36 @@ static hp_status parse_section(const hp_xml_node *root, hp_section *sec, const h
             int style_break = style_id >= 0 && (size_t)style_id < st->para_count &&
                 st->paras[style_id].valid && st->paras[style_id].page_break_before;
             rc = parse_section_paragraph(n, sec, st);
+            /* A floating table is anchored to the paragraph, not an inline
+             * character. Text serialized after it still occupies the anchor
+             * line above a table with a positive vertical paragraph offset. */
+            if(line && sec->block_count==first+2 && sec->blocks[first].kind==HP_BLOCK_TABLE &&
+               sec->blocks[first+1].kind==HP_BLOCK_PARAGRAPH) {
+                hp_table *table=sec->blocks[first].table;
+                if(table && table->has_pos && !table->pos.treat_as_char && table->pos.vert_rel_para &&
+                   table->pos.vert_offset_hwp>0 && !sec->blocks[first+1].paragraph.object_anchor_only) {
+                    hp_block object=sec->blocks[first];
+                    sec->blocks[first]=sec->blocks[first+1];sec->blocks[first+1]=object;
+                    sec->blocks[first].has_saved_y=1;sec->blocks[first].saved_y_hwp=attr_u32(line,"vertpos",0);
+                    sec->blocks[first+1].has_saved_y=1;
+                    sec->blocks[first+1].saved_y_hwp=attr_u32(line,"vertpos",0)+(uint32_t)table->pos.vert_offset_hwp;
+                    table->pos.vert_offset_hwp=0; /* resolved into the block's page coordinate */
+                }
+            }
             if (sec->block_count > first) {
                 sec->blocks[first].page_break_before = attr_l(n, "pageBreak", 0) != 0 || style_break;
                 sec->blocks[first].column_break_before = attr_l(n, "columnBreak", 0) != 0;
                 sec->blocks[first].saved_break_before = saved_break;
+                {
+                    const hp_xml_node *ctrl;
+                    for(ctrl=hp_xml_find(n,"pageHiding");ctrl;ctrl=hp_xml_find_after(n,ctrl,"pageHiding"))
+                        if(attr_l(ctrl,"hidePageNum",0))sec->blocks[first].hide_page_number=1;
+                    for(ctrl=hp_xml_find(n,"newNum");ctrl;ctrl=hp_xml_find_after(n,ctrl,"newNum")) {
+                        const char *type=hp_xml_attr(ctrl,"numType");long long value=attr_l(ctrl,"num",0);
+                        if(type && strcmp(type,"PAGE")==0 && value>0 && value<=1000000)
+                            sec->blocks[first].page_number_reset=(int)value;
+                    }
+                }
                 /* A single rendered block can retain the paragraph's position.
                  * Mixed text/object paragraphs keep sequential flow. */
                 if(line && sec->block_count==first+1) {
@@ -1285,6 +1382,18 @@ static hp_status parse_section(const hp_xml_node *root, hp_section *sec, const h
             continue;
         }
         n = hp_xml_find_after(root, n, NULL);
+    }
+    {
+        const hp_xml_node *pn=hp_xml_find(root,"pageNum");
+        const char *pos=hp_xml_attr(pn,"pos"),*side=hp_xml_attr(pn,"sideChar");
+        static const char *const positions[]={"NONE","TOP_LEFT","TOP_CENTER","TOP_RIGHT","BOTTOM_LEFT","BOTTOM_CENTER","BOTTOM_RIGHT",
+            "TOP_OUTSIDE","BOTTOM_OUTSIDE","TOP_INSIDE","BOTTOM_INSIDE"};
+        size_t i;
+        if(pn) {
+            sec->page_number_position=5;
+            for(i=0;i<sizeof(positions)/sizeof(positions[0]);i++)if(pos && strcmp(pos,positions[i])==0)sec->page_number_position=(int)i;
+            if(side)strncpy(sec->page_number_side,side,sizeof(sec->page_number_side)-1);
+        }
     }
     return rc;
 }
@@ -1561,3 +1670,6 @@ hp_status hp_hwpx_roundtrip(const char *input, const char *output, hp_document *
     }
     return HP_OK;
 }
+
+
+

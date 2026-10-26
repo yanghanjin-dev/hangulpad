@@ -513,8 +513,9 @@ static void test_source_formatting(void) {
         "<charPr id='0' height='1000'><fontRef hangul='0' latin='0'/><italic/>"
         "<underline type='BOTTOM'/><strikeout shape='3D' color='none'/></charPr>"
         "<charPr id='1' height='1000'><fontRef hangul='0' latin='0'/><strikeout shape='SOLID' color='#000000'/></charPr></head>";
-    const char *section="<sec><pagePr width='59528' height='84186'><margin header='2834' footer='4252'/></pagePr>"
-        "<p><run charPrIDRef='0'><t>A</t></run><linesegarray><lineseg textpos='0' vertpos='100' vertsize='1000' textheight='1000' baseline='850'/></linesegarray></p>"
+    const char *section="<sec><secPr><startNum page='7'/><visibility hideFirstPageNum='1'/></secPr>"
+        "<pagePr width='59528' height='84186'><margin header='2834' footer='4252'/></pagePr>"
+        "<p><run charPrIDRef='0'><ctrl><pageNum pos='TOP_RIGHT' sideChar='-'/><newNum numType='PAGE' num='3'/><pageHiding hidePageNum='1'/></ctrl><t>A</t></run><linesegarray><lineseg textpos='0' vertpos='100' vertsize='1000' textheight='1000' baseline='850'/></linesegarray></p>"
         "<p><run><tbl rowCnt='1' colCnt='2'><sz width='20000' height='3000'/><inMargin left='0' right='0' top='0' bottom='0'/>"
         "<tr><tc hasMargin='0'><subList vertAlign='CENTER'><p><run charPrIDRef='1'><t>B</t></run></p></subList>"
         "<cellAddr rowAddr='0' colAddr='0'/><cellSz width='10000' height='3000'/><cellMargin left='510'/></tc>"
@@ -536,6 +537,8 @@ static void test_source_formatting(void) {
         EXPECT(r->italic && r->underline && !r->strikeout,"format: color none disables strikeout");
         EXPECT(s->paragraphs[0].runs[0].italic && strcmp(s->paragraphs[0].runs[0].script_faces[1],"Times New Roman")==0,"format: cloned run retains formatting");
         EXPECT(s->page.header_height==2834 && s->page.footer_height==4252,"format: header/footer space");
+        EXPECT(s->page_number_start==7 && s->hide_first_page_number && s->page_number_position==3 && strcmp(s->page_number_side,"-")==0,"page numbers: section settings");
+        EXPECT(s->blocks[0].page_number_reset==3 && s->blocks[0].hide_page_number,"page numbers: paragraph controls");
         EXPECT(s->blocks[0].paragraph.segs[0].baseline_hwp==850 && s->blocks[0].saved_y_hwp==100,"format: source baseline and origin");
         EXPECT(t && t->cells[0].pad_left_hwp==0 && t->cells[1].pad_left_hwp==510,"format: inherited versus explicit cell margins");
         EXPECT(t->cells[0].vertical_align==1 && t->cells[1].vertical_align==2,"format: cell vertical alignment");

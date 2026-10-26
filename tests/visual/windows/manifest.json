@@ -7,11 +7,14 @@
       "pages": 17,
       "fallback_cuts": 0,
       "images": {
-        "ethics-001.png": "66d7fdf730229cdfe1639f3a7461fb2aee5868e0275c2a218a581d15b72961ab",
-        "ethics-005.png": "805bd7039cba08f2dbf4daba5719f6b87c589a45b63ad6791edbe1b8b0132dcc",
-        "ethics-006.png": "8d9520d5980890df01c847418763a6de8da7e4c178e5a44db38464a2c0670055",
-        "ethics-014.png": "df2d4dc328d4befbbe6d0ddb5d812705be698c83aa41018d862844073befcbc2",
-        "ethics-017.png": "f820ab3da6b86fff90b8e0ba83193c5aff348af0b6c08f9f41d7d62c29799dae"
+        "ethics-001.png": "cb28aa375f0910d929be9d59b553051f0bd06669cd657606d6941e1823824871",
+        "ethics-002.png": "c90eda2fc5af681f6b2725e3258828883dfd61bd56ac5ef941213de55c48a26a",
+        "ethics-003.png": "e63d9cbcbea5a5a9226f9dfe0ca43a71599707aba653e55bc7c34f50a3f9e749",
+        "ethics-005.png": "359e5da88361592fd1c3275473aa7d5b43092a3ac76be2347617cd5f22d0a756",
+        "ethics-006.png": "35f8ac4f9b01dcaffde23249d5dfb9e8d42419405762ae5be466339d299a64b1",
+        "ethics-013.png": "9be0e03521adaa598975f38f8dfd9774debd8aed9c4639d29b4814afbfe72228",
+        "ethics-014.png": "df69301c1b966be9d43268ed549679e24f4cfb4d31ecdf8c7d4bb5fee6cb331d",
+        "ethics-017.png": "d872cd10c795f747ab311c9107a9b9186152cd1a31ca0c4435ebce126debfa3f"
       }
     },
     "gyuje": {
@@ -19,10 +22,10 @@
       "pages": 20,
       "fallback_cuts": 0,
       "images": {
-        "gyuje-001.png": "6e1a1554a1f5de4a61725653e87ca59378d2467ad4450ddd4b01b592003ce6c3",
-        "gyuje-004.png": "8a05cb9b9fbf11d75130245704d484402a47aa470f2a6a8864f76ab110a58a8f",
-        "gyuje-018.png": "2e118d5da68ac3fee6c23c9f09059919d484a45dc948605d63cebdc658405af7",
-        "gyuje-020.png": "28d188c03464e305f57464a7d14cfaf3f1d35eeef7c34796cee0b804833d92fa"
+        "gyuje-001.png": "320f0cdd2349fab7582ee78d1b9c4ae1953ebf36801ae900d682347608ce2609",
+        "gyuje-004.png": "5848d4d449c784ad68e816baffd3e2fd2653aa63c11a7cd2b9ef3ce3e1707aec",
+        "gyuje-018.png": "e98d0ff372d7373b34c37ed009ea18b14295342d4824b2f04068185bff33588a",
+        "gyuje-020.png": "ec7c980ef94bb4030ad241687e92c1ec21c26b2178e53c194135608dca8aa3d3"
       }
     },
     "mfds": {
@@ -30,8 +33,9 @@
       "pages": 4,
       "fallback_cuts": 0,
       "images": {
-        "mfds-001.png": "e2e4238e67f8060d4ef0da64540fa18eaccb432c227f149d91d4d90a5b9befa2",
-        "mfds-004.png": "1ba1b8565cef14de94d237df8720508e9fb5b63de350735106dc615c2847e31d"
+        "mfds-001.png": "9ad9cda1f025a9b0b81b56a74520d1713556f1f261b0eba8ca87c2ad483857f6",
+        "mfds-003.png": "090b2234246c1dc94d09e3174521c8f6f344734cdd8480136daae2542bf46e56",
+        "mfds-004.png": "84e5d8b3f39adddded9bd5a4773883d9a5dcea66803d24d8aa93c5b6c9893a2e"
       }
     },
     "merged": {
@@ -39,8 +43,8 @@
       "pages": 2,
       "fallback_cuts": 0,
       "images": {
-        "merged-001.png": "53fa2395d4ec7227afee4acf4b7eae583dbb5c63939b2e528de5e8ae2d8feaf5",
-        "merged-002.png": "8deb0a122898ea227e44a989875a3793c86dae4f9e3bcc382fc2eeaf02e0f407"
+        "merged-001.png": "e47160a963620226dc6dea89c217cb58877a8be31600aa623b70081c76c10cb0",
+        "merged-002.png": "138a44b6a0874cf2a663fc2ba1f20c1a102d34074fed3624dbb7d8d8780afe4a"
       }
     }
   }

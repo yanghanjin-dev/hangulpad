@@ -8,7 +8,7 @@ PREFIX ?= /usr/local
 # Version comes from include/hp/version.h (single source of truth).
 VERSION := $(shell sed -n 's/^#define HP_VERSION_STRING "\(.*\)"/\1/p' include/hp/version.h)
 
-LIB_SRCS := src/common.c src/ir.c src/xml.c src/hwpx_package.c src/hwpx_read.c src/hwpx_write.c src/hwp.c
+LIB_SRCS := src/common.c src/ir.c src/xml.c src/hwpx_package.c src/hwpx_read.c src/hwpx_write.c src/edit.c src/hwp.c
 LIB_OBJS := $(LIB_SRCS:src/%.c=build/%.o)
 
 .PHONY: fuzz golden-check golden-update irdump version all clean test cli check release release-windows release-windows-portable release-source install uninstall dist
@@ -148,3 +148,4 @@ clean:
 # Regenerate the checked-in HWPX fixture (optional).
 fixture: build/hp
 	./build/hp new tests/fixtures/simple_paragraph.hwpx --text "한글패드" --title simple_paragraph
+

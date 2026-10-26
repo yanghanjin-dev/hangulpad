@@ -1,17 +1,15 @@
+# Sources contain Korean string literals: keep them UTF-8 (no BOM) on Windows editors too.
 root = true
 
 [*]
 charset = utf-8
 end_of_line = lf
 insert_final_newline = true
-trim_trailing_whitespace = true
 
-[*.{c,h,cmake,md,txt,yml,py}]
+[*.{c,h}]
 indent_style = space
 indent_size = 4
 
-[*.md]
-trim_trailing_whitespace = false
-
-[*.{ps1,rc}]
-end_of_line = crlf
+[*.ps1]
+# Windows PowerShell 5.1 reads BOM-less scripts as ANSI: keep .ps1 files ASCII-only.
+charset = utf-8

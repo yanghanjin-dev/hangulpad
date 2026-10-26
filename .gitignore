@@ -3,9 +3,6 @@
 *.o
 *.a
 *.so
-*.exe
-*.dll
-*.obj
 *.swp
 .DS_Store
 .idea/
@@ -13,5 +10,4 @@
 *.hwpx.bak
 /tmp/
 /target/
-CMakeUserPresets.json
-*.user
+Cargo.lock

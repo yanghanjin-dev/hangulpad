@@ -1,0 +1,80 @@
+#include "hp/edit.h"
+#include "../src/win_utf8.h"
+#include "../src/hwpx_package.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#define CHECK(x) do{if(!(x)){fprintf(stderr,"edit failure line %d: %s\n",__LINE__,#x);return 1;}}while(0)
+static int same_parts(const char *a,const char *b,int section_equal){
+    hp_document *x=NULL,*y=NULL;size_t i;int ok=1;
+    if(hp_hwpx_read(a,&x)!=HP_OK||hp_hwpx_read(b,&y)!=HP_OK)return 0;
+    for(i=0;i<x->package->entry_count;i++){
+        const hp_package_entry *p=&x->package->entries[i],*q=hp_package_find(y->package,p->name);
+        if(!section_equal&&strstr(p->name,"Contents/section"))continue;
+        if(!q||p->len!=q->len||memcmp(p->data,q->data,p->len))ok=0;
+    }
+    hp_document_free(x);hp_document_free(y);return ok;
+}
+static int styled(void){
+    const char *xml="<hs:sec xmlns:hs=\"http://www.hancom.co.kr/hwpml/2011/section\" xmlns:hp=\"http://www.hancom.co.kr/hwpml/2011/paragraph\"><hp:p id=\"0\" paraPrIDRef=\"0\" styleIDRef=\"0\"><hp:run charPrIDRef=\"0\"><hp:t keep=\"yes\">가나다</hp:t></hp:run><hp:run charPrIDRef=\"0\"><hp:t>라마바사</hp:t></hp:run></hp:p><hp:p id=\"1\" paraPrIDRef=\"0\" styleIDRef=\"0\"/></hs:sec>";
+    hp_document *d=NULL;hp_editor *e=NULL;hp_package_entry *p=NULL;size_t i;
+    CHECK(hp_hwpx_read("tmp/edit-source.hwpx",&d)==HP_OK);
+    for(i=0;i<d->package->entry_count;i++)if(!strcmp(d->package->entries[i].name,d->package->section_parts[0]))p=&d->package->entries[i];CHECK(p);
+    free(p->data);p->len=strlen(xml);p->data=malloc(p->len+1);CHECK(p->data);memcpy(p->data,xml,p->len+1);
+    CHECK(hp_hwpx_write(d,"tmp/edit-style.hwpx")==HP_OK);hp_document_free(d);d=NULL;
+    CHECK(hp_editor_open("tmp/edit-style.hwpx",&e)==HP_OK);CHECK(hp_editor_count(e)==2);
+    CHECK(hp_editor_set(e,0,"가나X라마바사")==HP_OK);CHECK(hp_editor_set(e,1,"빈 문단에 입력")==HP_OK);
+    CHECK(hp_editor_save(e,"tmp/edit-style-out.hwpx")==HP_OK);
+    CHECK(hp_hwpx_read("tmp/edit-style-out.hwpx",&d)==HP_OK);
+    p=NULL;for(i=0;i<d->package->entry_count;i++)if(!strcmp(d->package->entries[i].name,d->package->section_parts[0]))p=&d->package->entries[i];CHECK(p);
+    CHECK(strstr((const char *)p->data,"<hp:t keep=\"yes\">가나X</hp:t>"));
+    CHECK(strstr((const char *)p->data,"<hp:t>라마바사</hp:t>"));
+    hp_document_free(d);hp_editor_free(e);return 0;
+}
+static int corpus(const char *path){
+    hp_editor *e=NULL,*again=NULL;size_t i,n,changed=0;char out[100],raw[100]; unsigned long key=0;const unsigned char *q=(const unsigned char *)path;for(;*q;q++)key=key*33+*q;snprintf(out,sizeof(out),"tmp/edit-corpus-%lu.hwpx",key);snprintf(raw,sizeof(raw),"tmp/edit-corpus-%lu-raw.hwpx",key);
+    CHECK(hp_editor_open(path,&e)==HP_OK);n=hp_editor_count(e);CHECK(n>10);
+    CHECK(hp_editor_save(e,raw)==HP_OK);CHECK(same_parts(path,raw,1));
+    for(i=0;i<n;i++)if(*hp_editor_text(e,i)){
+        const char *old=hp_editor_text(e,i);size_t len=strlen(old);char *s=malloc(len+32);CHECK(s);
+        memcpy(s,old,len);strcpy(s+len," 수정 & 😀");CHECK(hp_editor_set(e,i,s)==HP_OK);free(s);changed++;
+    }
+    CHECK(changed>10);CHECK(hp_editor_save(e,out)==HP_OK);CHECK(same_parts(path,out,0));
+    CHECK(hp_editor_open(out,&again)==HP_OK);CHECK(hp_editor_count(again)==n);
+    for(i=0;i<n;i++)CHECK(!strcmp(hp_editor_text(e,i),hp_editor_text(again,i)));
+    printf("Corpus paragraphs edited and reread: %zu; unchanged package parts preserved\n",changed);
+    hp_editor_free(e);hp_editor_free(again);return 0;
+}
+int main(int argc,char **argv){
+    hp_utf8_args(&argc,&argv);
+    if(argc>1)return corpus(argv[1]);
+    hp_editor *e=NULL,*again=NULL;hp_document *doc=hp_document_from_text("첫 문단");size_t i,n;const char *src="tmp/edit-source.hwpx",*out="tmp/edit-output.hwpx";
+    CHECK(doc);CHECK(hp_section_add_paragraph_text(&doc->sections[0],"둘째 문단")==HP_OK);CHECK(hp_hwpx_write(doc,src)==HP_OK);hp_document_free(doc);
+    CHECK(hp_editor_open(src,&e)==HP_OK);CHECK(hp_editor_count(e)==2);
+    CHECK(hp_editor_save(e,out)==HP_OK);CHECK(same_parts(src,out,1));
+    CHECK(hp_editor_set(e,0,"한글 & <수정> 😀\n다음 줄\t탭")==HP_OK);
+    CHECK(hp_editor_insert(e,0,NULL)==HP_OK);CHECK(hp_editor_set(e,1,"추가 문단")==HP_OK);
+    CHECK(hp_editor_insert(e,1,NULL)==HP_OK);CHECK(hp_editor_set(e,2,"두 번째 추가")==HP_OK);
+    CHECK(hp_editor_delete(e,3)==HP_OK);CHECK(hp_editor_save(e,out)==HP_OK);
+    CHECK(same_parts(src,out,0));CHECK(hp_editor_open(out,&again)==HP_OK);CHECK(hp_editor_count(again)==3);
+    CHECK(!strcmp(hp_editor_text(again,0),"한글 & <수정> 😀\n다음 줄\t탭"));
+    CHECK(!strcmp(hp_editor_text(again,1),"추가 문단"));CHECK(!strcmp(hp_editor_text(again,2),"두 번째 추가"));
+    hp_editor_free(again);again=NULL;
+    CHECK(hp_editor_save(e,out)==HP_OK);CHECK(hp_editor_set(e,0,"")==HP_OK);CHECK(hp_editor_save(e,src)==HP_OK);
+    CHECK(hp_editor_open(src,&again)==HP_OK);CHECK(!strcmp(hp_editor_text(again,0),""));hp_editor_free(again);hp_editor_free(e);
+    CHECK(hp_editor_open("tests/fixtures/table_pagination.hwpx",&e)==HP_OK);
+    n=hp_editor_count(e);CHECK(n>2);
+    for(i=0;i<n;i++){const char *s=hp_editor_text(e,i);if(*s){CHECK(hp_editor_set(e,i,"표 안과 본문 수정 & 보존")==HP_OK);}}
+    CHECK(hp_editor_save(e,out)==HP_OK);CHECK(same_parts("tests/fixtures/table_pagination.hwpx",out,0));
+    CHECK(hp_editor_open(out,&again)==HP_OK);CHECK(hp_editor_count(again)==n);
+    for(i=0;i<n;i++)if(*hp_editor_text(again,i))CHECK(!strcmp(hp_editor_text(again,i),"표 안과 본문 수정 & 보존"));
+    CHECK(hp_editor_save(e,"no-such-directory/out.hwpx")!=HP_OK);
+    hp_editor_free(e);hp_editor_free(again);CHECK(styled()==0);puts("Text replacement, insert/delete, Unicode, table preservation, repeat save passed");return 0;
+}
+
+
+
+
+
+
+

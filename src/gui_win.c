@@ -10,6 +10,7 @@
 #endif
 
 #include "hp/hwpx.h"
+#include "hp/edit.h"
 #include "hp/ir.h"
 #include "hp/version.h"
 #include "line_layout.h"
@@ -28,6 +29,20 @@
 #define ID_BTN_PREV 1002
 #define ID_BTN_NEXT 1003
 #define ID_STATUS 1004
+#define IDM_FILE_NEW 40020
+#define IDM_FILE_SAVE 40021
+#define IDM_FILE_SAVE_AS 40022
+#define IDM_EDIT_MODE 40023
+#define IDM_PREVIEW 40024
+#define IDM_ADD_PARA 40025
+#define IDM_DELETE_PARA 40026
+#define IDM_UNDO 40027
+#define IDM_CUT 40028
+#define IDM_COPY 40029
+#define IDM_PASTE 40030
+#define IDM_SELECT_ALL 40031
+#define ID_PARALIST 1100
+#define ID_TEXT 1101
 #define IDM_FILE_OPEN 40002
 #define IDM_FILE_OPEN_SAMPLE 40003
 #define IDM_FILE_EXIT 40005
@@ -52,6 +67,8 @@ typedef struct {
     int first;
     int count;
     size_t section;
+    int printed_number,number_hidden,number_position;
+    char number_side[16];
 } layout_page;
 typedef struct { int block, column, y, offset, height, header_height; } layout_piece;
 static int g_unsafe_table_cuts, g_suppressed_headers;
@@ -61,6 +78,16 @@ static HWND g_btn_prev;
 static HWND g_btn_next;
 static HWND g_status;
 static hp_document *g_doc;
+static hp_editor *g_editor;
+static HWND g_paralist,g_text,g_edit_button,g_preview_button,g_save_button;
+static size_t g_edit_index=(size_t)-1;
+static wchar_t g_path[MAX_PATH];
+static int g_dirty,g_loading,g_editing;
+static int editor_discard(void);
+static void editor_list(size_t selected);
+static void editor_title(void);
+static void editor_mode(int editing);
+static void open_document(HWND hwnd,const wchar_t *path);
 static flat_ref *g_flat;
 static int g_flat_capacity;
 static int g_flat_count;
@@ -71,6 +98,8 @@ static int g_piece_count, g_piece_capacity;
 static int g_page_count;
 static int g_page_index;
 static IWICImagingFactory *g_wic;
+static struct { LOGFONTW lf; HFONT font; } g_regular_fonts[64];
+static int g_regular_font_count;
 /* Unique substitutions, collected by both measurement and painting. */
 static struct { wchar_t source[LF_FACESIZE], target[LF_FACESIZE]; unsigned code; } g_font_changes[256];
 static int g_font_change_count, g_font_changes_truncated;
@@ -203,9 +232,10 @@ static HFONT make_font(HDC hdc, const hp_run *run) {
      * accumulates enough error to wrap saved lines and expand table rows. */
     lf.lfHeight = -MulDiv(size_hwp, dpi*FONT_SCALE, 7200);
     lf.lfWeight = run->bold ? FW_BOLD : FW_NORMAL;
-    lf.lfItalic=(BYTE)run->italic;lf.lfUnderline=(BYTE)run->underline;lf.lfStrikeOut=(BYTE)run->strikeout;
+    lf.lfItalic=(BYTE)run->italic;lf.lfUnderline=FALSE; /* underline follows full glyph advances, including spaces */
+    lf.lfStrikeOut=(BYTE)run->strikeout;
     lf.lfCharSet = DEFAULT_CHARSET;
-    lf.lfQuality = CLEARTYPE_QUALITY;
+    lf.lfQuality = ANTIALIASED_QUALITY; /* neutral page pixels, without LCD color fringes */
     wcsncpy(lf.lfFaceName, face, LF_FACESIZE - 1);
     return CreateFontIndirectW(&lf);
 }
@@ -380,7 +410,7 @@ static HBITMAP decode_image_mem(const unsigned char *data, size_t len, int *out_
     if (FAILED(hr) || !conv) {
         goto done;
     }
-    hr = conv->lpVtbl->Initialize(conv, (IWICBitmapSource *)frame, &GUID_WICPixelFormat32bppBGR,
+    hr = conv->lpVtbl->Initialize(conv, (IWICBitmapSource *)frame, &GUID_WICPixelFormat32bppPBGRA,
                                   WICBitmapDitherTypeNone, NULL, 0.0, WICBitmapPaletteTypeCustom);
     if (FAILED(hr)) {
         goto done;
@@ -552,8 +582,23 @@ static int table_geometry(HDC hdc, const hp_table *t, int content_w, int **colum
             if (width > cw[cell->col]) cw[cell->col] = width;
         }
     }
+    /* Merged cells constrain the sum of their columns. Resolve missing columns
+     * from those constraints before using an equal-width fallback. */
+    for(pass=0;pass<cols;pass++) {
+        int changed=0;
+        for(i=0;i<t->cell_count;i++) {
+            const hp_table_cell *cell=&t->cells[i];int known=0,missing=0,only=-1,end=cell->col+cell->colspan;
+            if(cell->col<0 || end>cols || cell->colspan<1 || !cell->width_hwp)continue;
+            for(c=cell->col;c<end;c++){known+=cw[c];if(!cw[c]){missing++;only=c;}}
+            if(missing==1 && hp_line_px(cell->width_hwp)>known){cw[only]=hp_line_px(cell->width_hwp)-known;changed=1;}
+        }
+        if(!changed)break;
+    }
     for (c=0; c<cols; c++) { if (!cw[c]) cw[c] = table_w/cols; sum += cw[c]; }
-    if (sum > 0) for (c=0; c<cols; c++) cw[c] = MulDiv(cw[c],table_w,sum);
+    if (sum > 0) {
+        int source=0,previous=0;
+        for(c=0;c<cols;c++){int edge;source+=cw[c];edge=MulDiv(source,table_w,sum);cw[c]=edge-previous;previous=edge;}
+    }
     for (r=0; r<rows; r++) rh[r] = 1;
     /* Nonspanning rows first; spanning cells expand only the missing height. */
     for (pass=0; pass<2; pass++) for (i=0; i<t->cell_count; i++) {
@@ -755,6 +800,33 @@ static int append_piece(hp_slice slice, int block, size_t section) {
     g_pages[slice.page].count++;
     return 1;
 }
+static void assign_page_numbers(void) {
+    int page,number=1,position=0;size_t previous_section=(size_t)-1;
+    char side[16]={0};
+    for(page=0;page<g_page_count;page++) {
+        layout_page *pg=&g_pages[page];const hp_section *sec=&g_doc->sections[pg->section];int i;
+        int first_in_section=pg->section!=previous_section;
+        if(first_in_section) {
+            if(sec->page_number_start>0)number=sec->page_number_start;
+            if(sec->page_number_position>=0) {
+                position=sec->page_number_position;
+                memcpy(side,sec->page_number_side,sizeof(side));
+            }
+            previous_section=pg->section;
+        }
+        pg->number_hidden=first_in_section && sec->hide_first_page_number;
+        for(i=0;i<pg->count;i++) {
+            const layout_piece *piece=&g_pieces[pg->first+i];
+            const hp_block *block=flat_block(piece->block);
+            /* A continued table does not replay controls on each fragment. */
+            if(piece->offset || !block)continue;
+            if(block->page_number_reset>0)number=block->page_number_reset;
+            if(block->hide_page_number)pg->number_hidden=1;
+        }
+        pg->printed_number=number++;pg->number_position=position;
+        memcpy(pg->number_side,side,sizeof(side));
+    }
+}
 static void rebuild_pages(HWND hwnd) {
     HDC hdc;
     hp_flow flow={0,0,0,1,1};
@@ -874,6 +946,7 @@ static void rebuild_pages(HWND hwnd) {
         free(ends);free(hard);free(ink.bands);
     }
     ReleaseDC(hwnd,hdc);
+    assign_page_numbers();
     if(g_page_index>=g_page_count)g_page_index=g_page_count ? g_page_count-1 : 0;
     if(g_page_count)use_section(g_pages[g_page_index].section);
     return;
@@ -953,16 +1026,86 @@ static int glyph_language(wchar_t c) {
     if(c>=0x2000 && c<=0x2bff)return 5;
     return 4;
 }
+/* A physical regular face selected with FW_BOLD is GDI synthetic bold. HWP
+ * advances synthetic bold by 5% of the regular glyph, rather than GDI's
+ * sometimes narrower hinted fake-bold metrics. Real bold faces keep theirs. */
+static int selected_synthetic_bold(HDC dc) {
+    static struct {wchar_t face[LF_FACESIZE];int synthetic;} cache[128];static int count;
+    wchar_t face[LF_FACESIZE]={0};unsigned char weight[2];int i,synthetic;
+    GetTextFaceW(dc,LF_FACESIZE,face);
+    for(i=0;i<count;i++)if(wcscmp(cache[i].face,face)==0)return cache[i].synthetic;
+    if(GetFontData(dc,0x322f534f,4,weight,2)!=2)return 0;
+    synthetic=((unsigned)weight[0]*256+weight[1])<600;
+    if(count<128){wcscpy(cache[count].face,face);cache[count++].synthetic=synthetic;}
+    return synthetic;
+}
+static double regular_advance(HDC dc,HFONT selected,const wchar_t *text,int length,double fallback) {
+    LOGFONTW lf;HFONT regular,old;SIZE size;int i,owned=0;
+    GetObjectW(selected,sizeof(lf),&lf);lf.lfWeight=FW_NORMAL;
+    for(i=0;i<g_regular_font_count;i++)if(memcmp(&lf,&g_regular_fonts[i].lf,sizeof(lf))==0)break;
+    if(i<g_regular_font_count)regular=g_regular_fonts[i].font;
+    else {
+        regular=CreateFontIndirectW(&lf);if(!regular)return fallback;
+        if(g_regular_font_count<64){g_regular_fonts[g_regular_font_count].lf=lf;g_regular_fonts[g_regular_font_count++].font=regular;}
+        else owned=1;
+    }
+    old=SelectObject(dc,regular);GetTextExtentPoint32W(dc,text,length,&size);SelectObject(dc,old);
+    if(owned){DeleteObject(regular);}return size.cx*1.05/FONT_SCALE;
+}
+static void draw_text_underline(HDC dc,double left,double right,int baseline,const hp_run *run){
+    int em=hp_line_px(run->font_size_hwp ? run->font_size_hwp : 1000);
+    int thickness=em/24,offset=em/14;RECT rect;COLORREF old;
+    if(thickness<1)thickness=1;if(offset<1)offset=1;
+    rect=(RECT){(int)(left+0.5),baseline+offset,(int)(right+0.5),baseline+offset+thickness};
+    old=SetDCBrushColor(dc,RGB((run->color_rgb>>16)&255,(run->color_rgb>>8)&255,run->color_rgb&255));
+    FillRect(dc,&rect,(HBRUSH)GetStockObject(DC_BRUSH));SetDCBrushColor(dc,old);
+}
 static double glyph_step(HDC hdc, const hp_run *run, const wchar_t *text, int length,
                       int x, int y, int draw) {
+    unsigned code=(unsigned)text[0];
+    if(length==2 && text[0]>=0xd800 && text[0]<=0xdbff && text[1]>=0xdc00 && text[1]<=0xdfff)
+        code=0x10000+((text[0]-0xd800)<<10)+(text[1]-0xdc00);
+    /* HWP's four boxed section digits have no Unicode font fallback on Windows.
+     * Keep source text intact and draw their documented appearance explicitly. */
+    if(code>=0xf02b1 && code<=0xf02b4) {
+        int em=hp_line_px(run->font_size_hwp),side=em*9/10;
+        if(draw) {
+            int saved=SaveDC(hdc);wchar_t digit=(wchar_t)(L'1'+code-0xf02b1);
+            RECT box={x,y+em/10,x+side,y+em/10+side};
+            HPEN pen=CreatePen(PS_SOLID,1,RGB((run->color_rgb>>16)&255,(run->color_rgb>>8)&255,run->color_rgb&255));
+            HFONT font=CreateFontW(-side,0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,DEFAULT_CHARSET,0,0,ANTIALIASED_QUALITY,0,L"Times New Roman");
+            SelectObject(hdc,pen);SelectObject(hdc,GetStockObject(NULL_BRUSH));Rectangle(hdc,box.left,box.top,box.right,box.bottom);
+            SelectObject(hdc,font);SetBkMode(hdc,TRANSPARENT);SetTextColor(hdc,RGB((run->color_rgb>>16)&255,(run->color_rgb>>8)&255,run->color_rgb&255));
+            DrawTextW(hdc,&digit,1,&box,DT_CENTER|DT_VCENTER|DT_SINGLELINE|DT_NOPREFIX);
+            RestoreDC(hdc,saved);DeleteObject(font);DeleteObject(pen);
+        }
+        return em;
+    }
+    if(text[0]=='\t' && run->tab_width_hwp) {
+        double width=run->tab_width_hwp/75.0;
+        if(draw && run->tab_leader) {
+            int pos,baseline=y+hp_line_px(run->font_size_hwp)*4/5;
+            COLORREF old=SetDCBrushColor(hdc,RGB((run->color_rgb>>16)&255,(run->color_rgb>>8)&255,run->color_rgb&255));
+            for(pos=2;pos<(int)width-1;pos+=4){RECT dot={x+pos,baseline,x+pos+1,baseline+1};FillRect(hdc,&dot,(HBRUSH)GetStockObject(DC_BRUSH));}
+            SetDCBrushColor(hdc,old);
+        }
+        return width;
+    }
     HFONT font = font_for_glyph(hdc, run, text, length), old = (HFONT)SelectObject(hdc, font);
     SIZE size;
     int lang = glyph_language(text[0]);
     int ratio = run->width_percent[lang] > 0 ? run->width_percent[lang] : 100;
     double em=(run->font_size_hwp ? run->font_size_hwp : 1000)/75.0;
-    double advance;
+    double advance,base_width;
     GetTextExtentPoint32W(hdc, text, length, &size);
-    advance = size.cx*ratio/(100.0*FONT_SCALE) + em*run->spacing_percent[lang]/100.0;
+    base_width=size.cx/(double)FONT_SCALE;
+    if(text[0]==' ' && !run->use_font_space)base_width=em/2;
+    else if(run->bold && selected_synthetic_bold(hdc)) {
+        base_width=regular_advance(hdc,font,text,length,base_width);
+    }
+    /* HWP spacing is a percentage of this glyph's advance, including half-em
+     * spaces and narrow Latin punctuation, rather than a percentage of em. */
+    advance=base_width*ratio/100.0*(100+run->spacing_percent[lang])/100.0;
     if (draw) {
         int saved = SaveDC(hdc);
         XFORM transform = {(FLOAT)ratio / (100.0f*FONT_SCALE), 0, 0, 1.0f/FONT_SCALE, (FLOAT)x, (FLOAT)y};
@@ -982,17 +1125,21 @@ static int glyph_length(const wchar_t *text, size_t i, size_t end) {
     return text[i] >= 0xD800 && text[i] <= 0xDBFF && i + 1 < end &&
            text[i+1] >= 0xDC00 && text[i+1] <= 0xDFFF ? 2 : 1;
 }
-static int saved_line_box(const hp_paragraph *para, const hp_line_seg *seg, int left, int right, int *origin) {
+static int saved_line_box(const hp_paragraph *para, const hp_line_seg *seg, int left, int right, int first_line, int *origin) {
     int box_left=left+hwp_px_i(para->indent_left_hwp);
     int box_right=right-hwp_px_i(para->indent_right_hwp);
     int available,saved_width=hp_line_px(seg->horzsize_hwp);
     if(box_left<left)box_left=left;
     if(box_right>right)box_right=right;
     if(box_right<=box_left)box_right=box_left+1;
-    *origin=box_left+hwp_px_i((int32_t)seg->horzpos_hwp);
+    /* Saved positions already include the paragraph's left margin. */
+    *origin=left+hwp_px_i((int32_t)seg->horzpos_hwp);
     if(*origin<box_left || *origin>=box_right)*origin=box_left;
+    if(first_line && para->indent_first_hwp>0)*origin+=hwp_px_i(para->indent_first_hwp);
+    else if(!first_line && para->indent_first_hwp<0)*origin+=hwp_px_i(-para->indent_first_hwp);
+    if(*origin>=box_right)*origin=box_right-1;
     available=box_right-*origin;
-    if(seg==para->segs && para->inline_prefix_width_hwp) {
+    if(first_line && para->inline_prefix_width_hwp) {
         int prefix=hp_line_px(para->inline_prefix_width_hwp);
         *origin+=prefix;available-=prefix;
         if(saved_width>prefix)saved_width-=prefix;
@@ -1003,6 +1150,7 @@ static int saved_line_box(const hp_paragraph *para, const hp_line_seg *seg, int 
 }
 static double span_width(HDC hdc,const hp_paragraph *para,const wchar_t *all,size_t start,size_t end) {
     hp_run fallback={0};double width=0;fallback.font_size_hwp=1000;
+    while(end>start && (all[end-1]==L' ' || all[end-1]==L'\t'))end--;
     while(start<end) {
         const hp_run *run=run_at_char(para,start,NULL);
         int len=glyph_length(all,start,end);
@@ -1010,6 +1158,37 @@ static double span_width(HDC hdc,const hp_paragraph *para,const wchar_t *all,siz
         start+=(size_t)len;
     }
     return width;
+}
+/* Justification stretches word spaces and East Asian character boundaries,
+ * never the inside of a Latin word or the leading spaces used for bullets. */
+static int justification_gap(const wchar_t *text,size_t at,size_t first,size_t end) {
+    size_t next;int a,b;
+    if(at<first||at>=end)return 0;
+    next=at+(size_t)glyph_length(text,at,end);if(next>=end)return 0;
+    if(text[at]==' ')return 1;
+    a=glyph_language(text[at]);b=glyph_language(text[next]);
+    return (a==0||a==2||a==3)&&(b==0||b==2||b==3);
+}
+/* Stored lines describe the original line breaks, even when physical GDI font
+ * metrics differ slightly from Hangul's. Retain them at their original width;
+ * a genuinely narrower cell or an edited paragraph still reflows normally. */
+static int saved_line_fits(const hp_paragraph *para,const hp_line_seg *seg,int first,int available,double width) {
+    double expected=seg->horzsize_hwp/75.0;
+    if(first && para->indent_first_hwp>0)expected-=para->indent_first_hwp/75.0;
+    if(!first && para->indent_first_hwp<0)expected+=para->indent_first_hwp/75.0;
+    if(first)expected-=para->inline_prefix_width_hwp/75.0;
+    return para->align==HP_ALIGN_JUSTIFY && seg->horzsize_hwp && available>=expected-2 && width<=available*1.15+2;
+}
+static double saved_fit_tolerance(int available){return available>200?available*0.01:2.0;}
+static double justified_gap(const hp_paragraph *para,const wchar_t *text,size_t start,size_t end,
+                            size_t text_length,double width,int available) {
+    size_t ci,first=start,last=end;int gaps=0;
+    if(para->align!=HP_ALIGN_JUSTIFY||end<=start||text[end-1]=='\n'||text[end-1]=='\r')return 0;
+    if(end>=text_length&&width<=available)return 0;
+    while(first<last&&text[first]==' ')first++;
+    while(last>first&&(text[last-1]==' '||text[last-1]=='\t'))last--;
+    for(ci=first;ci<last;ci+=(size_t)glyph_length(text,ci,last))gaps+=width>available ? ci+(size_t)glyph_length(text,ci,last)<last : justification_gap(text,ci,first,last);
+    return gaps&&width<=available*1.15+2 ? (available-width)/gaps : 0;
 }
 static int text_ink_height(HDC hdc,const hp_paragraph *para,const wchar_t *all,size_t start,size_t end,int baseline,int *offset) {
     size_t ri,at=0;int height=0,visible=0,top=0;
@@ -1062,10 +1241,11 @@ static int layout_saved_para(HDC hdc, const hp_paragraph *para, int left, int ri
         for(si=group;si<=last;si++) {
             size_t begin=para->segs[si].textpos;
             size_t end=si<last ? para->segs[si+1].textpos : end_group;
-            int origin,available=saved_line_box(para,&para->segs[si],left,right,&origin);
+            int origin,available=saved_line_box(para,&para->segs[si],left,right,si==0,&origin);
             if(end>text_length)end=text_length;
             if(begin>end)begin=end;
-            if(span_width(hdc,para,all,begin,end)>available)reflow=1;
+            {double natural=span_width(hdc,para,all,begin,end);
+             if(natural>available+saved_fit_tolerance(available)&&!saved_line_fits(para,&para->segs[si],si==0,available,natural))reflow=1;}
         }
         if(group && hard_breaks && line_count<capacity)hard_breaks[line_count]=group_base;
         si=group;
@@ -1073,9 +1253,9 @@ static int layout_saved_para(HDC hdc, const hp_paragraph *para, int left, int ri
             const hp_line_seg *seg=&para->segs[si<=last ? si : last];
             size_t start=reflow ? stream : seg->textpos;
             size_t end=reflow ? end_group : (si<last ? para->segs[si+1].textpos : end_group);
-            size_t finish,ci;
-            int origin,available=saved_line_box(para,seg,left,right,&origin);
-            int pitch=hp_line_px(hp_line_height(seg));double width=0,x;
+            size_t finish,ci,visible_end,visible_start;
+            int origin,available=saved_line_box(para,seg,left,right,line_count==0,&origin);
+            int pitch=hp_line_px(hp_line_height(seg));double width=0,x,gap,tab_adjust=0;size_t right_tab=(size_t)-1;
             if(pitch<1)pitch=1;
             if(end>text_length)end=text_length;
             if(start>end)start=end;
@@ -1094,6 +1274,23 @@ static int layout_saved_para(HDC hdc, const hp_paragraph *para, int left, int ri
                 if(reflow && finish>start && width+advance>available)break;
                 width+=advance;finish+=(size_t)len;
             }
+            width=span_width(hdc,para,all,start,finish);
+            /* A terminal right-aligned tab absorbs font metric differences;
+             * following page numbers share the paragraph's right boundary. */
+            for(ci=start;ci<finish;ci++)if(all[ci]=='\t') {
+                const hp_run *tab=run_at_char(para,ci,NULL);
+                right_tab=tab && tab->tab_align_right ? ci : (size_t)-1;
+            }
+            if(right_tab!=(size_t)-1) {
+                const hp_run *tab=run_at_char(para,right_tab,NULL);
+                tab_adjust=available-width;
+                if(tab->tab_width_hwp/75.0+tab_adjust<1){right_tab=(size_t)-1;tab_adjust=0;}
+                else width+=tab_adjust;
+            }
+            visible_start=start;visible_end=finish;
+            while(visible_start<visible_end&&all[visible_start]==' ')visible_start++;
+            while(visible_end>visible_start&&(all[visible_end-1]==' '||all[visible_end-1]=='\t'))visible_end--;
+            gap=justified_gap(para,all,start,finish,text_length,width,available);
             x=origin;
             if(para->align==HP_ALIGN_CENTER && width<available)x+=(available-width)/2;
             else if(para->align==HP_ALIGN_RIGHT && width<available)x+=available-width;
@@ -1101,14 +1298,20 @@ static int layout_saved_para(HDC hdc, const hp_paragraph *para, int left, int ri
                 const hp_run *run=run_at_char(para,ci,NULL);
                 int len=glyph_length(all,ci,finish);
                 if(all[ci]!='\n' && all[ci]!='\r') {
-                    int glyph_y=base+top;
-                    if(seg->baseline_hwp) {
+                    int glyph_y=base+top,baseline=0;double glyph_x=x;
+                    if(seg->baseline_hwp || (run && run->underline)) {
                         HFONT gf=font_for_glyph(hdc,run ? run : &fallback,all+ci,len),old=(HFONT)SelectObject(hdc,gf);
                         TEXTMETRICW tm;GetTextMetricsW(hdc,&tm);
-                        glyph_y+=hp_line_px(seg->baseline_hwp)-(tm.tmAscent+FONT_SCALE/2)/FONT_SCALE;
+                        if(seg->baseline_hwp)glyph_y+=hp_line_px(seg->baseline_hwp)-(tm.tmAscent+FONT_SCALE/2)/FONT_SCALE;
+                        baseline=glyph_y+(tm.tmAscent+FONT_SCALE/2)/FONT_SCALE;
                         SelectObject(hdc,old);DeleteObject(gf);
                     }
-                    x+=glyph_step(hdc,run ? run : &fallback,all+ci,len,(int)(x+0.5),glyph_y,1);
+                    if(ci==right_tab && run){hp_run tab=*run;
+                        tab.tab_width_hwp=(uint32_t)(tab.tab_width_hwp+tab_adjust*75.0+0.5);
+                        x+=glyph_step(hdc,&tab,all+ci,len,(int)(x+0.5),glyph_y,1);
+                    }else x+=glyph_step(hdc,run ? run : &fallback,all+ci,len,(int)(x+0.5),glyph_y,1);
+                    if(gap<0 ? ci>=visible_start&&ci+(size_t)len<visible_end : justification_gap(all,ci,visible_start,visible_end))x+=gap;
+                    if(run && run->underline)draw_text_underline(hdc,glyph_x,x,baseline,run);
                 }
                 ci+=(size_t)len;
             }
@@ -1146,7 +1349,7 @@ static int layout_text_para(HDC hdc, const hp_paragraph *para, int left, int rig
     pitch=para_line_pitch_px(para,height);
     line.vertsize_hwp=line.textheight_hwp=(uint32_t)(height*75);
     line.spacing_hwp=(uint32_t)((pitch-height)*75);
-    line.horzpos_hwp=(uint32_t)para->indent_first_hwp;
+    line.horzpos_hwp=0; /* paragraph indentation is applied by saved_line_box */
     copy=*para;copy.segs=&line;copy.seg_count=1;
     return layout_saved_para(hdc,&copy,left,right,base,draw,ends,capacity,hard,ink,ink_origin);
 }
@@ -1218,7 +1421,34 @@ static void draw_image(HDC hdc, const hp_image *img, int left, int right, int *y
     mem = CreateCompatibleDC(hdc);
     old = SelectObject(mem, hbmp);
     SetStretchBltMode(hdc, HALFTONE);
-    StretchBlt(hdc, x, yy, dw, dh, mem, sx, sy, sw, sh, SRCCOPY);
+    {
+        DIBSECTION dib={0};int alpha=0;size_t k;
+        GetObject(hbmp,sizeof(dib),&dib);
+        if(dib.dsBm.bmBits)for(k=0;k<(size_t)iw*ih;k++)
+            if(((const BYTE *)dib.dsBm.bmBits)[k*4+3]!=255){alpha=1;break;}
+        if(!alpha)StretchBlt(hdc,x,yy,dw,dh,mem,sx,sy,sw,sh,SRCCOPY);
+        else {
+            /* AlphaBlend itself only uses nearest-neighbour scaling. Resample
+             * premultiplied colors and alpha together before compositing. */
+            IWICBitmap *source=NULL;IWICBitmapClipper *clip=NULL;IWICBitmapScaler *scale=NULL;
+            HBITMAP resized=NULL;void *pixels=NULL;BITMAPINFO info={0};
+            WICRect crop={sx,sy,sw,sh};BLENDFUNCTION blend={AC_SRC_OVER,0,255,AC_SRC_ALPHA};
+            if(SUCCEEDED(g_wic->lpVtbl->CreateBitmapFromHBITMAP(g_wic,hbmp,NULL,WICBitmapUsePremultipliedAlpha,&source)) &&
+               SUCCEEDED(g_wic->lpVtbl->CreateBitmapClipper(g_wic,&clip)) &&
+               SUCCEEDED(clip->lpVtbl->Initialize(clip,(IWICBitmapSource *)source,&crop)) &&
+               SUCCEEDED(g_wic->lpVtbl->CreateBitmapScaler(g_wic,&scale)) &&
+               SUCCEEDED(scale->lpVtbl->Initialize(scale,(IWICBitmapSource *)clip,dw,dh,WICBitmapInterpolationModeFant))) {
+                info.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);info.bmiHeader.biWidth=dw;info.bmiHeader.biHeight=-dh;
+                info.bmiHeader.biPlanes=1;info.bmiHeader.biBitCount=32;
+                resized=CreateDIBSection(hdc,&info,DIB_RGB_COLORS,&pixels,NULL,0);
+                if(resized && SUCCEEDED(scale->lpVtbl->CopyPixels(scale,NULL,(UINT)dw*4,(UINT)dw*dh*4,pixels))) {
+                    SelectObject(mem,resized);AlphaBlend(hdc,x,yy,dw,dh,mem,0,0,dw,dh,blend);SelectObject(mem,hbmp);
+                } else AlphaBlend(hdc,x,yy,dw,dh,mem,sx,sy,sw,sh,blend);
+            } else AlphaBlend(hdc,x,yy,dw,dh,mem,sx,sy,sw,sh,blend);
+            if(resized)DeleteObject(resized);
+            if(scale)scale->lpVtbl->Release(scale);if(clip)clip->lpVtbl->Release(clip);if(source)source->lpVtbl->Release(source);
+        }
+    }
     SelectObject(mem, old);
     DeleteDC(mem);
     DeleteObject(hbmp);
@@ -1283,6 +1513,53 @@ static void draw_container(HDC hdc, const hp_container *c, int left, int right, 
     *y = max_bottom > *y ? max_bottom : (*y + 8);
 }
 
+/* Device-space segments keep dotted/dashed borders patterned at every pen width;
+ * Win32 cosmetic dashed pens otherwise turn thick lines into solid strokes. */
+static void draw_axis_border(HDC dc,int x1,int y1,int x2,int y2,int width,uint32_t rgb,hp_border_line style){
+    int vertical=x1==x2,length=vertical?y2-y1:x2-x1,pos=0,index=0;
+    int pattern[8]={1,1},count=2;COLORREF old;
+    if(width<1)width=1;if(length<=0)return;
+    if(style==HP_BORDER_DOUBLE_SLIM) {
+        int separation=width>2?width-1:2,offset=separation/2;
+        draw_axis_border(dc,x1-(vertical?offset:0),y1-(vertical?0:offset),x2-(vertical?offset:0),y2-(vertical?0:offset),1,rgb,HP_BORDER_SOLID);
+        draw_axis_border(dc,x1+(vertical?separation-offset:0),y1+(vertical?0:separation-offset),x2+(vertical?separation-offset:0),y2+(vertical?0:separation-offset),1,rgb,HP_BORDER_SOLID);
+        return;
+    }
+    if(style==HP_BORDER_SOLID){pattern[0]=length;count=1;}
+    else if(style==HP_BORDER_DOT){pattern[0]=1;pattern[1]=2;}
+    else if(style==HP_BORDER_LONG_DASH){pattern[0]=4;pattern[1]=2;}
+    else if(style==HP_BORDER_DASH_DOT||style==HP_BORDER_DASH_DOT_DOT){
+        pattern[0]=3;pattern[1]=2;pattern[2]=1;pattern[3]=2;count=4;
+        if(style==HP_BORDER_DASH_DOT_DOT){pattern[4]=1;pattern[5]=2;count=6;}
+    }
+    old=SetDCBrushColor(dc,RGB((rgb>>16)&255,(rgb>>8)&255,rgb&255));
+    while(pos<length){
+        int step=style==HP_BORDER_SOLID?length:pattern[index]*width;
+        int end=pos+step;if(end>length)end=length;
+        if(!(index&1)){
+            RECT r=vertical?(RECT){x1-width/2,y1+pos,x1+(width+1)/2,y1+end}:
+                (RECT){x1+pos,y1-width/2,x1+end,y1+(width+1)/2};
+            FillRect(dc,&r,(HBRUSH)GetStockObject(DC_BRUSH));
+        }
+        pos=end;index=(index+1)%count;
+    }
+    SetDCBrushColor(dc,old);
+}
+/* Share one horizontal origin for cell content, borders and continuation edges.
+ * Inline tables follow paragraph alignment, including their outer margins. */
+static int table_origin_x(const hp_table *t,int left,int right,int width){
+    int x=left+(right-left-width)/2;
+    if(t->has_anchor_align){
+        int l=left+hwp_px_i(t->anchor_left_hwp)+padding_px(t->outer_left_hwp);
+        int r=right-hwp_px_i(t->anchor_right_hwp)-padding_px(t->outer_right_hwp);
+        if(t->anchor_align==HP_ALIGN_RIGHT)x=r-width;
+        else if(t->anchor_align==HP_ALIGN_CENTER)x=l+(r-l-width)/2;
+        else x=l;
+        if(x+width>right)x=right-width;
+        if(x<left)x=left;
+    }
+    return x;
+}
 static void draw_table(HDC hdc, const hp_table *t, int left, int right, int *y) {
     int content_w = right-left;
     int rows, cols, table_w = 0, x0, c;
@@ -1293,7 +1570,7 @@ static void draw_table(HDC hdc, const hp_table *t, int left, int right, int *y) 
     if (!col_w || !row_h) { *y += height; return; }
     rows = t->row_count; cols = t->col_count;
     for (c=0; c<cols; c++) table_w += col_w[c];
-    x0 = left+(content_w-table_w)/2;
+    x0 = table_origin_x(t,left,right,table_w);
     {
         int yy = *y;
         for (i = 0; i < t->cell_count; i++) {
@@ -1328,55 +1605,11 @@ static void draw_table(HDC hdc, const hp_table *t, int left, int right, int *y) 
                 DeleteObject(br);
             }
             {
-                int bw = cell->borders.width_px > 0 ? cell->borders.width_px : 1;
-                int has_b =
-                    cell->borders.left || cell->borders.right || cell->borders.top || cell->borders.bottom;
-                if (has_b) {
-                    if (cell->borders.top) {
-                        HPEN pen = CreatePen(PS_SOLID, bw,
-                                             RGB((cell->borders.color_top >> 16) & 255,
-                                                 (cell->borders.color_top >> 8) & 255,
-                                                 cell->borders.color_top & 255));
-                        HGDIOBJ op = SelectObject(hdc, pen);
-                        MoveToEx(hdc, cx, cy, NULL);
-                        LineTo(hdc, cx + cw, cy);
-                        SelectObject(hdc, op);
-                        DeleteObject(pen);
-                    }
-                    if (cell->borders.bottom) {
-                        HPEN pen = CreatePen(PS_SOLID, bw,
-                                             RGB((cell->borders.color_bottom >> 16) & 255,
-                                                 (cell->borders.color_bottom >> 8) & 255,
-                                                 cell->borders.color_bottom & 255));
-                        HGDIOBJ op = SelectObject(hdc, pen);
-                        MoveToEx(hdc, cx, cy + ch - 1, NULL);
-                        LineTo(hdc, cx + cw, cy + ch - 1);
-                        SelectObject(hdc, op);
-                        DeleteObject(pen);
-                    }
-                    if (cell->borders.left) {
-                        HPEN pen = CreatePen(PS_SOLID, bw,
-                                             RGB((cell->borders.color_left >> 16) & 255,
-                                                 (cell->borders.color_left >> 8) & 255,
-                                                 cell->borders.color_left & 255));
-                        HGDIOBJ op = SelectObject(hdc, pen);
-                        MoveToEx(hdc, cx, cy, NULL);
-                        LineTo(hdc, cx, cy + ch);
-                        SelectObject(hdc, op);
-                        DeleteObject(pen);
-                    }
-                    if (cell->borders.right) {
-                        HPEN pen = CreatePen(PS_SOLID, bw,
-                                             RGB((cell->borders.color_right >> 16) & 255,
-                                                 (cell->borders.color_right >> 8) & 255,
-                                                 cell->borders.color_right & 255));
-                        HGDIOBJ op = SelectObject(hdc, pen);
-                        MoveToEx(hdc, cx + cw - 1, cy, NULL);
-                        LineTo(hdc, cx + cw - 1, cy + ch);
-                        SelectObject(hdc, op);
-                        DeleteObject(pen);
-                    }
-                }
+                int bw=cell->borders.width_px>0?cell->borders.width_px:1;
+                if(cell->borders.top)draw_axis_border(hdc,cx,cy,cx+cw,cy,cell->borders.width_top>0?cell->borders.width_top:bw,cell->borders.color_top,cell->borders.style_top);
+                if(cell->borders.bottom)draw_axis_border(hdc,cx,cy+ch-(cell->row+cell->rowspan==rows),cx+cw,cy+ch-(cell->row+cell->rowspan==rows),cell->borders.width_bottom>0?cell->borders.width_bottom:bw,cell->borders.color_bottom,cell->borders.style_bottom);
+                if(cell->borders.left)draw_axis_border(hdc,cx,cy,cx,cy+ch,cell->borders.width_left>0?cell->borders.width_left:bw,cell->borders.color_left,cell->borders.style_left);
+                if(cell->borders.right)draw_axis_border(hdc,cx+cw-(cell->col+cell->colspan==cols),cy,cx+cw-(cell->col+cell->colspan==cols),cy+ch,cell->borders.width_right>0?cell->borders.width_right:bw,cell->borders.color_right,cell->borders.style_right);
             }
             {
                 int pad_l = padding_px(cell->pad_left_hwp);
@@ -1453,7 +1686,7 @@ static void table_continuation_edges(HDC hdc,const hp_table *table,int left,int 
     table_geometry(hdc,table,right-left,&columns,&rows);
     if(!columns || !rows) {free(columns);free(rows);return;}
     for(r=0;r<table->col_count;r++)table_w+=columns[r];
-    x0=left+(right-left-table_w)/2;
+    x0=table_origin_x(table,left,right,table_w);
     for(ci=0;ci<table->cell_count;ci++) {
         const hp_table_cell *cell=&table->cells[ci];
         int x=x0,y=origin_y,w=0,h=0,edge;
@@ -1465,13 +1698,14 @@ static void table_continuation_edges(HDC hdc,const hp_table *table,int left,int 
         for(edge=0;edge<2;edge++) {
             int cut=edge ? bottom : top;
             int any=cell->borders.left || cell->borders.right || cell->borders.top || cell->borders.bottom;
-            if(y<cut && cut<y+h && (!any || cell->borders.top || cell->borders.bottom)) {
+            if(y<cut && (cut<y+h || (edge && cut==y+h && cell->borders.bottom)) &&
+               (!any || cell->borders.top || cell->borders.bottom)) {
                 uint32_t color=edge ? cell->borders.color_bottom : cell->borders.color_top;
-                HPEN pen=CreatePen(PS_SOLID,cell->borders.width_px>0 ? cell->borders.width_px : 1,
-                    any ? RGB((color>>16)&255,(color>>8)&255,color&255) : RGB(160,160,160));
-                HGDIOBJ old=SelectObject(hdc,pen);
-                MoveToEx(hdc,x,edge ? cut-1 : cut,NULL);LineTo(hdc,x+w,edge ? cut-1 : cut);
-                SelectObject(hdc,old);DeleteObject(pen);
+                hp_border_line style=edge?cell->borders.style_bottom:cell->borders.style_top;
+                int bw=edge?cell->borders.width_bottom:cell->borders.width_top;
+                draw_axis_border(hdc,x,edge?cut-1:cut,x+w,edge?cut-1:cut,
+                    bw>0?bw:(cell->borders.width_px>0?cell->borders.width_px:1),
+                    any?color:0xa0a0a0,any?style:HP_BORDER_SOLID);
             }
         }
     }
@@ -1514,18 +1748,32 @@ static void paint_document_page(HDC mem,int page_index) {
             int top=mt+piece->y;
             render_layout_piece(mem,piece,left,top,col_w);
         }
-        {
-            wchar_t pn[32];
+        if(!pg->number_hidden && pg->number_position>0) {
+            wchar_t pn[64];
+            wchar_t *side=utf8_to_wide(pg->number_side);
             HFONT f, old;
             SIZE sz;
-            swprintf(pn, 32, L"- %d -", page_index + 1);
+            int position=pg->number_position,x,y,top;
+            if(side && side[0])swprintf(pn,64,L"%ls %d %ls",side,pg->printed_number,side);
+            else swprintf(pn,64,L"%d",pg->printed_number);
+            free(side);
             f = CreateFontW(-12, 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, CLEARTYPE_QUALITY, 0,
                             L"Malgun Gothic");
             old = (HFONT)SelectObject(mem, f);
             SetTextColor(mem, RGB(90, 90, 90));
             SetBkMode(mem, TRANSPARENT);
             GetTextExtentPoint32W(mem, pn, (int)wcslen(pn), &sz);
-            TextOutW(mem, (PAGE_W_PX - sz.cx) / 2, PAGE_H_PX - 36, pn, (int)wcslen(pn));
+            if(position>=7) {
+                int outside=position==7 || position==8;
+                int right=(pg->printed_number%2)!=0;
+                if(!outside)right=!right;
+                position=(position==7 || position==9 ? 1 : 4)+(right ? 2 : 0);
+            }
+            top=position<=3;
+            x=position==1 || position==4 ? ml : position==3 || position==6 ? PAGE_W_PX-mr-sz.cx : (PAGE_W_PX-sz.cx)/2;
+            y=top ? padding_px(section->page.margin_top) : PAGE_H_PX-padding_px(section->page.margin_bottom)-sz.cy;
+            SetTextAlign(mem,TA_LEFT | TA_TOP | TA_NOUPDATECP);
+            TextOutW(mem,x,y,pn,(int)wcslen(pn));
             SelectObject(mem, old);
             DeleteObject(f);
         }
@@ -1551,7 +1799,7 @@ static void paint_document(HWND hwnd) {
     if (!g_doc || g_page_count == 0) {
         SetBkMode(hdc, TRANSPARENT);
         SetTextColor(hdc, RGB(240, 240, 240));
-        TextOutW(hdc, 24, TOOLBAR_H + 24, L"HWPX 문서를 열어 주세요.", 20);
+        TextOutW(hdc, 24, TOOLBAR_H + 24, L"HWPX 문서를 열어 주세요.", (int)wcslen(L"HWPX 문서를 열어 주세요."));
         EndPaint(hwnd, &ps);
         return;
     }
@@ -1592,6 +1840,7 @@ static void paint_document(HWND hwnd) {
 }
 
 static void free_doc(void) {
+    int font_index;for(font_index=0;font_index<g_regular_font_count;font_index++)DeleteObject(g_regular_fonts[font_index].font);g_regular_font_count=0;
     if (g_doc) {
         hp_document_free(g_doc);
         g_doc = NULL;
@@ -1605,7 +1854,10 @@ static void free_doc(void) {
 }
 
 static void open_document(HWND hwnd, const wchar_t *path) {
-    char *utf8 = wide_to_utf8(path);
+    char *utf8;
+    hp_editor *ed=NULL;
+    if(!editor_discard())return;
+    utf8=wide_to_utf8(path);
     hp_document *doc = NULL;
     wchar_t title[MAX_PATH + 32];
     const wchar_t *name;
@@ -1617,7 +1869,11 @@ static void open_document(HWND hwnd, const wchar_t *path) {
         MessageBoxW(hwnd, L"HWPX 문서를 읽지 못했습니다.", L"한글패드", MB_ICONERROR);
         return;
     }
+    if(hp_editor_open(utf8,&ed)!=HP_OK){hp_document_free(doc);free(utf8);MessageBoxW(hwnd,L"편집 문서를 준비하지 못했습니다.",L"한글패드",MB_ICONERROR);return;}
     free(utf8);
+    hp_editor_free(g_editor);g_editor=ed;g_edit_index=(size_t)-1;
+    wcscpy(g_path,path);g_dirty=0;
+    editor_list(0);
     free_doc();
     g_doc = doc;
     g_font_change_count=0;g_font_changes_truncated=0;
@@ -1629,8 +1885,11 @@ static void open_document(HWND hwnd, const wchar_t *path) {
     name = name ? name + 1 : path;
     swprintf(title, MAX_PATH + 32, L"한글패드 " HP_VERSION_STRING L" — %ls", name);
     SetWindowTextW(hwnd, title);
+    editor_title();
     InvalidateRect(hwnd, NULL, TRUE);
 }
+
+#include "gui_edit.inc"
 
 static void file_open(HWND hwnd) {
     OPENFILENAMEW ofn;
@@ -1643,7 +1902,7 @@ static void file_open(HWND hwnd) {
     ofn.nMaxFile = MAX_PATH;
     ofn.lpstrFilter = L"HWPX 문서 (*.hwpx)\0*.hwpx\0모든 파일 (*.*)\0*.*\0";
     ofn.nFilterIndex = 1;
-    ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_EXPLORER;
+    ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_EXPLORER | OFN_NOCHANGEDIR;
     ofn.lpstrDefExt = L"hwpx";
     if (GetOpenFileNameW(&ofn)) {
         open_document(hwnd, file);
@@ -1675,19 +1934,22 @@ static void open_sample(HWND hwnd) {
 static void about(HWND hwnd) {
     MessageBoxW(hwnd,
                 L"한글패드 " HP_VERSION_STRING L" (" HP_VERSION_DATE L")\n"
-                L"HWPX 엔진 레이아웃\n\n"
-                L"글꼴·크기·정렬·표·이미지를 문서에서 읽어\n"
-                L"PDF처럼 페이지로 표시합니다.\n\n"
+                L"HWPX 문단 편집 및 페이지 보기\n\n"
+                L"본문·표 안 텍스트 편집, 문단 추가·삭제와 저장을 지원합니다.\n"
+                L"F2: 본문 편집 / F5: 페이지 미리보기\n\n"
                 L"본 제품은 한글과컴퓨터의 HWP 문서 파일(.hwp) 공개 문서를 "
                 L"참고하여 개발하였습니다.",
                 L"한글패드 정보", MB_OK | MB_ICONINFORMATION);
 }
 
 static void layout_children(int cx, int cy) {
-    (void)cy;
+    if(g_editing){int lw=cx/3;if(lw>340)lw=340;MoveWindow(g_paralist,8,TOOLBAR_H+4,lw-12,cy-TOOLBAR_H-12,TRUE);MoveWindow(g_text,lw+4,TOOLBAR_H+4,cx-lw-12,cy-TOOLBAR_H-12,TRUE);}
     MoveWindow(g_btn_prev, 8, 6, 100, 28, TRUE);
     MoveWindow(g_btn_next, 116, 6, 100, 28, TRUE);
-    MoveWindow(g_status, 230, 6, cx - 240, 28, TRUE);
+    MoveWindow(g_edit_button,224,6,80,28,TRUE);
+    MoveWindow(g_preview_button,310,6,100,28,TRUE);
+    MoveWindow(g_save_button,416,6,70,28,TRUE);
+    MoveWindow(g_status, 496, 6, cx > 510 ? cx - 506 : 0, 28, TRUE);
 }
 
 static void goto_page(HWND hwnd, int idx) {
@@ -1705,6 +1967,21 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
         HMENU menubar = CreateMenu();
         HMENU file = CreatePopupMenu();
         HMENU help = CreatePopupMenu();
+        HMENU edit = CreatePopupMenu();
+        AppendMenuW(file, MF_STRING, IDM_FILE_NEW, L"새 문서\tCtrl+N");
+        AppendMenuW(file, MF_STRING, IDM_FILE_SAVE, L"저장\tCtrl+S");
+        AppendMenuW(file, MF_STRING, IDM_FILE_SAVE_AS, L"다른 이름으로 저장\tCtrl+Shift+S");
+        AppendMenuW(file, MF_SEPARATOR, 0, NULL);
+        AppendMenuW(edit, MF_STRING, IDM_EDIT_MODE, L"본문 편집\tF2");
+        AppendMenuW(edit, MF_STRING, IDM_PREVIEW, L"페이지 미리보기\tF5");
+        AppendMenuW(edit, MF_STRING, IDM_ADD_PARA, L"선택 문단 뒤에 문단 추가\tCtrl+Enter");
+        AppendMenuW(edit, MF_STRING, IDM_DELETE_PARA, L"선택 문단 삭제");
+        AppendMenuW(edit, MF_SEPARATOR, 0, NULL);
+        AppendMenuW(edit, MF_STRING, IDM_UNDO, L"실행 취소\tCtrl+Z");
+        AppendMenuW(edit, MF_STRING, IDM_CUT, L"잘라내기\tCtrl+X");
+        AppendMenuW(edit, MF_STRING, IDM_COPY, L"복사\tCtrl+C");
+        AppendMenuW(edit, MF_STRING, IDM_PASTE, L"붙여넣기\tCtrl+V");
+        AppendMenuW(edit, MF_STRING, IDM_SELECT_ALL, L"전체 선택\tCtrl+A");
         AppendMenuW(file, MF_STRING, IDM_FILE_OPEN_SAMPLE, L"샘플 문서 열기\tCtrl+1");
         AppendMenuW(file, MF_STRING, IDM_FILE_OPEN, L"HWPX 열기...\tCtrl+O");
         AppendMenuW(file, MF_SEPARATOR, 0, NULL);
@@ -1712,6 +1989,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
         AppendMenuW(help, MF_STRING, IDM_HELP_ABOUT, L"한글패드 정보");
         AppendMenuW(help, MF_STRING, IDM_FONT_REPORT, L"대체 글꼴 내역");
         AppendMenuW(menubar, MF_POPUP, (UINT_PTR)file, L"파일");
+        AppendMenuW(menubar, MF_POPUP, (UINT_PTR)edit, L"편집");
         AppendMenuW(menubar, MF_POPUP, (UINT_PTR)help, L"도움말");
         SetMenu(hwnd, menubar);
         g_btn_prev = CreateWindowW(L"BUTTON", L"◀ 이전", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, 0, 0, 0, 0,
@@ -1720,8 +1998,16 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
                                    (HMENU)(INT_PTR)ID_BTN_NEXT, GetModuleHandleW(NULL), NULL);
         g_status = CreateWindowW(L"STATIC", L"", WS_CHILD | WS_VISIBLE, 0, 0, 0, 0, hwnd,
                                  (HMENU)(INT_PTR)ID_STATUS, GetModuleHandleW(NULL), NULL);
+        g_edit_button=CreateWindowW(L"BUTTON",L"본문 편집",WS_CHILD|WS_VISIBLE|BS_PUSHBUTTON,0,0,0,0,hwnd,(HMENU)(INT_PTR)IDM_EDIT_MODE,GetModuleHandleW(NULL),NULL);
+        g_preview_button=CreateWindowW(L"BUTTON",L"미리보기",WS_CHILD|WS_VISIBLE|BS_PUSHBUTTON,0,0,0,0,hwnd,(HMENU)(INT_PTR)IDM_PREVIEW,GetModuleHandleW(NULL),NULL);
+        g_save_button=CreateWindowW(L"BUTTON",L"저장",WS_CHILD|WS_VISIBLE|BS_PUSHBUTTON,0,0,0,0,hwnd,(HMENU)(INT_PTR)IDM_FILE_SAVE,GetModuleHandleW(NULL),NULL);
+        g_paralist=CreateWindowExW(WS_EX_CLIENTEDGE,L"LISTBOX",L"",WS_CHILD|WS_VSCROLL|WS_TABSTOP|LBS_NOTIFY|LBS_NOINTEGRALHEIGHT,0,0,0,0,hwnd,(HMENU)(INT_PTR)ID_PARALIST,GetModuleHandleW(NULL),NULL);
+        g_text=CreateWindowExW(WS_EX_CLIENTEDGE,L"EDIT",L"",WS_CHILD|WS_VSCROLL|WS_TABSTOP|ES_MULTILINE|ES_AUTOVSCROLL|ES_WANTRETURN|WS_HSCROLL|ES_NOHIDESEL,0,0,0,0,hwnd,(HMENU)(INT_PTR)ID_TEXT,GetModuleHandleW(NULL),NULL);
+        SendMessageW(g_text,EM_SETLIMITTEXT,16*1024*1024,0);
+        SendMessageW(g_text,WM_SETFONT,(WPARAM)GetStockObject(DEFAULT_GUI_FONT),TRUE);
+        SendMessageW(g_paralist,WM_SETFONT,(WPARAM)GetStockObject(DEFAULT_GUI_FONT),TRUE);
         update_status();
-        PostMessageW(hwnd, WM_COMMAND, IDM_FILE_OPEN_SAMPLE, 0);
+        PostMessageW(hwnd, WM_COMMAND, IDM_FILE_NEW, 0);
         return 0;
     }
     case WM_SIZE:
@@ -1737,7 +2023,25 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
         goto_page(hwnd, g_page_index + (((short)HIWORD(wParam) < 0) ? 1 : -1));
         return 0;
     case WM_COMMAND:
+        if(LOWORD(wParam)==ID_TEXT&&HIWORD(wParam)==EN_CHANGE&&!g_loading){g_dirty=1;editor_title();return 0;}
+        if(LOWORD(wParam)==ID_PARALIST&&HIWORD(wParam)==LBN_SELCHANGE){
+            int row=(int)SendMessageW(g_paralist,LB_GETCURSEL,0,0);
+            if(editor_commit()&&row!=LB_ERR)editor_select((size_t)SendMessageW(g_paralist,LB_GETITEMDATA,row,0));
+            return 0;
+        }
         switch (LOWORD(wParam)) {
+        case IDM_FILE_NEW: editor_new();break;
+        case IDM_FILE_SAVE: editor_save(0);break;
+        case IDM_FILE_SAVE_AS: editor_save(1);break;
+        case IDM_EDIT_MODE: editor_mode(1);break;
+        case IDM_PREVIEW: editor_preview();break;
+        case IDM_ADD_PARA: editor_add();break;
+        case IDM_DELETE_PARA: editor_remove();break;
+        case IDM_UNDO: SendMessageW(g_text,EM_UNDO,0,0);break;
+        case IDM_CUT: SendMessageW(g_text,WM_CUT,0,0);break;
+        case IDM_COPY: SendMessageW(g_text,WM_COPY,0,0);break;
+        case IDM_PASTE: SendMessageW(g_text,WM_PASTE,0,0);break;
+        case IDM_SELECT_ALL: SendMessageW(g_text,EM_SETSEL,0,-1);break;
         case IDM_FILE_OPEN:
             file_open(hwnd);
             break;
@@ -1745,7 +2049,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
             open_sample(hwnd);
             break;
         case IDM_FILE_EXIT:
-            DestroyWindow(hwnd);
+            SendMessageW(hwnd,WM_CLOSE,0,0);
             break;
         case ID_BTN_PREV:
             goto_page(hwnd, g_page_index - 1);
@@ -1768,7 +2072,10 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
             goto_page(hwnd, g_page_index + 1);
         }
         return 0;
+    case WM_CLOSE:
+        if(editor_discard())DestroyWindow(hwnd);return 0;
     case WM_DESTROY:
+        hp_editor_free(g_editor);g_editor=NULL;
         free_doc();
         PostQuitMessage(0);
         return 0;
@@ -1816,7 +2123,14 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE hPrev, PWSTR cmd, int show) {
     }
     ShowWindow(g_main, show);
     while (GetMessageW(&msg, NULL, 0, 0) > 0) {
+        if(msg.message==WM_KEYDOWN&&(msg.wParam==VK_F2||msg.wParam==VK_F5)){SendMessageW(g_main,WM_COMMAND,msg.wParam==VK_F2?IDM_EDIT_MODE:IDM_PREVIEW,0);continue;}
         if (msg.message == WM_KEYDOWN && (GetKeyState(VK_CONTROL) & 0x8000)) {
+            int id=0;
+            if(msg.wParam=='N')id=IDM_FILE_NEW;
+            if(msg.wParam=='S')id=(GetKeyState(VK_SHIFT)&0x8000)?IDM_FILE_SAVE_AS:IDM_FILE_SAVE;
+            if(msg.wParam=='A'&&g_editing)id=IDM_SELECT_ALL;
+            if(msg.wParam==VK_RETURN&&g_editing)id=IDM_ADD_PARA;
+            if(id){SendMessageW(g_main,WM_COMMAND,id,0);continue;}
             if (msg.wParam == 'O') {
                 file_open(g_main);
                 continue;
@@ -1826,7 +2140,7 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE hPrev, PWSTR cmd, int show) {
                 continue;
             }
         }
-        if (msg.message == WM_KEYDOWN) {
+        if (msg.message == WM_KEYDOWN && !g_editing && msg.hwnd!=g_main) {
             SendMessageW(g_main, WM_KEYDOWN, msg.wParam, msg.lParam);
         }
         TranslateMessage(&msg);
@@ -1838,3 +2152,19 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE hPrev, PWSTR cmd, int show) {
     CoUninitialize();
     return (int)msg.wParam;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

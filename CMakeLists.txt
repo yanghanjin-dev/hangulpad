@@ -11,7 +11,7 @@ string(REGEX MATCH "[0-9]+\\.[0-9]+\\.[0-9]+" HP_VERSION "${version_line}")
 find_package(libzip CONFIG REQUIRED)
 add_library(hangulpad_engine STATIC
     src/common.c src/ir.c src/xml.c src/hwpx_package.c
-    src/hwpx_read.c src/hwpx_write.c src/hwp.c)
+    src/hwpx_read.c src/hwpx_write.c src/edit.c src/hwp.c)
 target_include_directories(hangulpad_engine PUBLIC include)
 target_link_libraries(hangulpad_engine PUBLIC libzip::zip)
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
@@ -28,7 +28,7 @@ if(WIN32)
     add_executable(HangulPad WIN32 src/gui_win.c res/hangulpad.rc)
     target_include_directories(HangulPad PRIVATE include)
     target_link_libraries(HangulPad PRIVATE hangulpad_engine
-        comdlg32 user32 gdi32 shell32 ole32 uuid windowscodecs)
+        comdlg32 user32 gdi32 shell32 ole32 uuid windowscodecs msimg32)
     if(MINGW)
         target_link_options(HangulPad PRIVATE -municode)
     endif()
@@ -54,6 +54,11 @@ if(BUILD_TESTING)
     add_executable(test_line_layout tests/test_line_layout.c)
     target_include_directories(test_line_layout PRIVATE include)
     add_test(NAME line-layout COMMAND test_line_layout)
+    add_executable(test_edit tests/test_edit.c)
+    target_link_libraries(test_edit PRIVATE hangulpad_engine)
+    if(WIN32)
+        target_link_libraries(test_edit PRIVATE shell32)
+    endif()
     add_executable(test_roundtrip tests/test_roundtrip.c)
     target_link_libraries(test_roundtrip PRIVATE hangulpad_engine)
     add_executable(test_pagination tests/test_pagination.c)
@@ -64,26 +69,52 @@ if(BUILD_TESTING)
     target_link_libraries(irdump PRIVATE hangulpad_engine)
     if(WIN32)
         target_link_libraries(irdump PRIVATE shell32) # UTF-8 arguments (Korean sample names)
+        add_executable(test_gui_fidelity tests/test_gui_fidelity.c)
+        target_link_libraries(test_gui_fidelity PRIVATE hangulpad_engine
+            comdlg32 user32 gdi32 shell32 ole32 uuid windowscodecs msimg32)
+        add_test(NAME gui-fidelity COMMAND test_gui_fidelity)
+        set_tests_properties(gui-fidelity PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+        add_executable(test_gui_decorations tests/test_gui_decorations.c)
+        target_link_libraries(test_gui_decorations PRIVATE hangulpad_engine
+            comdlg32 user32 gdi32 shell32 ole32 uuid windowscodecs msimg32)
+        add_test(NAME gui-decorations COMMAND test_gui_decorations)
+        set_tests_properties(gui-decorations PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+        add_executable(test_gui_edit tests/test_gui_edit.c)
+        target_link_libraries(test_gui_edit PRIVATE hangulpad_engine
+            comdlg32 user32 gdi32 shell32 ole32 uuid windowscodecs msimg32)
+        add_test(NAME gui-edit COMMAND test_gui_edit)
         add_executable(test_gui_layout tests/test_gui_layout.c)
         target_link_libraries(test_gui_layout PRIVATE hangulpad_engine
-            comdlg32 user32 gdi32 shell32 ole32 uuid windowscodecs)
+            comdlg32 user32 gdi32 shell32 ole32 uuid windowscodecs msimg32)
         add_executable(layout_render tools/layout_render.c)
         target_link_libraries(layout_render PRIVATE hangulpad_engine
-            comdlg32 user32 gdi32 shell32 ole32 uuid windowscodecs)
+            comdlg32 user32 gdi32 shell32 ole32 uuid windowscodecs msimg32)
         add_test(NAME gui-layout COMMAND test_gui_layout)
         set_tests_properties(gui-layout PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
     endif()
     # Tests that write files run in the build tree; their inputs are refreshed from the
     # source tree on every ctest run (not only at configure time).
     set(test_work "${CMAKE_CURRENT_BINARY_DIR}/test-work")
+    if(WIN32)
+        set_tests_properties(gui-edit PROPERTIES ENVIRONMENT "TMP=${test_work};TEMP=${test_work}"
+            FIXTURES_REQUIRED test_work)
+    endif()
     add_test(NAME prepare-test-work COMMAND "${CMAKE_COMMAND}" -E copy_directory
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures" "${test_work}/tests/fixtures")
     add_test(NAME prepare-test-tmp COMMAND "${CMAKE_COMMAND}" -E make_directory "${test_work}/tmp")
     set_tests_properties(prepare-test-work prepare-test-tmp PROPERTIES FIXTURES_SETUP test_work)
+    add_test(NAME edit COMMAND test_edit)
+    set(edit_tests edit)
+    foreach(corpus ethics gyuje-규제합리화 mfds-프로프라놀롤)
+        add_test(NAME "edit-${corpus}" COMMAND test_edit "${CMAKE_CURRENT_SOURCE_DIR}/sample/corpus/${corpus}.hwpx")
+        list(APPEND edit_tests "edit-${corpus}")
+    endforeach()
+    set_tests_properties(${edit_tests} PROPERTIES WORKING_DIRECTORY "${test_work}"
+        FIXTURES_REQUIRED test_work RESOURCE_LOCK edit_work)
     add_test(NAME xml COMMAND test_xml)
     add_test(NAME roundtrip COMMAND test_roundtrip)
     add_test(NAME pagination COMMAND test_pagination)
-    set_tests_properties(xml roundtrip pagination PROPERTIES WORKING_DIRECTORY "${test_work}"
+    set_tests_properties(edit xml roundtrip pagination PROPERTIES WORKING_DIRECTORY "${test_work}"
         FIXTURES_REQUIRED test_work)
     # Golden checks read samples and expected IR straight from the source tree.
     file(GLOB golden_inputs RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}" CONFIGURE_DEPENDS
@@ -131,3 +162,11 @@ install(DIRECTORY docs/ DESTINATION docs FILES_MATCHING PATTERN "*.md")
 set(CPACK_GENERATOR ZIP)
 set(CPACK_PACKAGE_FILE_NAME "hangulpad-${HP_VERSION}-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}-portable")
 include(CPack)
+
+
+
+
+
+
+
+

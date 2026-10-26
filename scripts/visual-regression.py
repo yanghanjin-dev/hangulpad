@@ -12,9 +12,9 @@ from PIL import Image, ImageChops
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = {
-    'ethics': ('sample/corpus/ethics.hwpx', 17, [1, 5, 6, 14, 17]),
+    'ethics': ('sample/corpus/ethics.hwpx', 17, [1, 2, 3, 5, 6, 13, 14, 17]),
     'gyuje': ('sample/corpus/gyuje-규제합리화.hwpx', 20, [1, 4, 18, 20]),
-    'mfds': ('sample/corpus/mfds-프로프라놀롤.hwpx', 4, [1, 4]),
+    'mfds': ('sample/corpus/mfds-프로프라놀롤.hwpx', 4, [1, 3, 4]),
     'merged': ('tests/fixtures/table_pagination.hwpx', 2, [1, 2]),
 }
 
@@ -80,3 +80,4 @@ def main():
 
 if __name__ == '__main__':
     raise SystemExit(main())
+

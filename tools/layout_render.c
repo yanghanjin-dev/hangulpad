@@ -47,6 +47,12 @@ int main(int argc,char **argv) {
         fprintf(f,"{\"page\":%d,\"block\":%d,\"kind\":%d,\"column\":%d,\"y\":%d,\"offset\":%d,\"height\":%d,\"header\":%d,\"text\":",i+1,p->block,b->kind,p->column,p->y,p->offset,p->height,p->header_height);
         if(b->kind==HP_BLOCK_PARAGRAPH && b->paragraph.run_count)json_text(f,b->paragraph.runs[0].text);else json_text(f,"");fputc('}',f);
     }
+    fputs("],\"page_numbers\":[",f);
+    for(i=0;i<g_page_count;i++) {
+        if(i)fputc(',',f);
+        fprintf(f,"{\"page\":%d,\"number\":%d,\"visible\":%s}",i+1,g_pages[i].printed_number,
+            !g_pages[i].number_hidden && g_pages[i].number_position>0 ? "true" : "false");
+    }
     fputs("]}\n",f);if(fclose(f)!=0)return 1;
     for(i=first;i<=last;i++) {snprintf(path,sizeof(path),"%s/page-%03d.bmp",argv[2],i);if(!bitmap_page(path,i-1))return 1;}
     printf("pages=%d rendered=%d..%d fallback_cuts=%d\n",g_page_count,first,last,g_unsafe_table_cuts);

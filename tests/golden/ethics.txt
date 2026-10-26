@@ -137,47 +137,67 @@ section 0 page=59528x84186 margin l=5669 r=5669 t=4251 b=4252 cols=1 gap=0 block
         seg textpos=0 vpos=0 vsize=2000 th=2000 sp=2000 hpos=590 hsize=42503
         run " " font="휴먼명조" size=2000 color=000000 bold=0
         run "Ⅰ. 추진배경 및 경과" font="휴먼명조" size=2000 color=000000 bold=1
-        run "  1" font="휴먼명조" size=2000 color=000000 bold=0
+        run "\t" font="휴먼명조" size=2000 color=000000 bold=0
+        run " 1" font="휴먼명조" size=2000 color=000000 bold=0
       para align=3 indent l=590 r=3115 first=0 space before=0 after=0 line=200%
         seg textpos=0 vpos=4000 vsize=1700 th=1700 sp=1700 hpos=590 hsize=42503
-        run "    󰊱 추진 배경  1" font="휴먼명조" size=1700 color=000000 bold=0
+        run "    󰊱 추진 배경" font="휴먼명조" size=1700 color=000000 bold=0
+        run "\t" font="휴먼명조" size=1700 color=000000 bold=0
+        run " 1" font="휴먼명조" size=1700 color=000000 bold=0
       para align=3 indent l=590 r=3115 first=0 space before=0 after=0 line=200%
         seg textpos=0 vpos=7400 vsize=1700 th=1700 sp=1700 hpos=590 hsize=42503
-        run "    󰊲 추진 경과  2" font="휴먼명조" size=1700 color=000000 bold=0
+        run "    󰊲 추진 경과" font="휴먼명조" size=1700 color=000000 bold=0
+        run "\t" font="휴먼명조" size=1700 color=000000 bold=0
+        run " 2" font="휴먼명조" size=1700 color=000000 bold=0
       para align=3 indent l=590 r=3115 first=0 space before=1000 after=0 line=200%
         seg textpos=0 vpos=11800 vsize=2000 th=2000 sp=2000 hpos=590 hsize=42503
         run " " font="휴먼명조" size=2000 color=000000 bold=0
         run "Ⅱ. 윤리기준 개요" font="휴먼명조" size=2000 color=000000 bold=1
-        run "  3" font="휴먼명조" size=2000 color=000000 bold=0
+        run "\t" font="휴먼명조" size=2000 color=000000 bold=0
+        run " 3" font="휴먼명조" size=2000 color=000000 bold=0
       para align=3 indent l=590 r=3115 first=0 space before=0 after=0 line=200%
         seg textpos=0 vpos=15800 vsize=1700 th=1700 sp=1700 hpos=590 hsize=42503
-        run "    󰊱 개요  3" font="휴먼명조" size=1700 color=000000 bold=0
+        run "    󰊱 개요" font="휴먼명조" size=1700 color=000000 bold=0
+        run "\t" font="휴먼명조" size=1700 color=000000 bold=0
+        run " 3" font="휴먼명조" size=1700 color=000000 bold=0
       para align=3 indent l=590 r=3115 first=0 space before=0 after=0 line=200%
         seg textpos=0 vpos=19200 vsize=1700 th=1700 sp=1700 hpos=590 hsize=42503
-        run "    󰊲 기본 체계  3" font="휴먼명조" size=1700 color=000000 bold=0
+        run "    󰊲 기본 체계" font="휴먼명조" size=1700 color=000000 bold=0
+        run "\t" font="휴먼명조" size=1700 color=000000 bold=0
+        run " 3" font="휴먼명조" size=1700 color=000000 bold=0
       para align=3 indent l=590 r=3115 first=0 space before=0 after=0 line=200%
         seg textpos=0 vpos=22600 vsize=1700 th=1700 sp=1700 hpos=590 hsize=42503
-        run "    󰊳 기준 구성  4" font="휴먼명조" size=1700 color=000000 bold=0
+        run "    󰊳 기준 구성" font="휴먼명조" size=1700 color=000000 bold=0
+        run "\t" font="휴먼명조" size=1700 color=000000 bold=0
+        run " 4" font="휴먼명조" size=1700 color=000000 bold=0
       para align=3 indent l=590 r=3115 first=0 space before=0 after=0 line=200%
         seg textpos=0 vpos=26000 vsize=1700 th=1700 sp=1700 hpos=590 hsize=42503
-        run "    󰊴 이행 절차  4" font="휴먼명조" size=1700 color=000000 bold=0
+        run "    󰊴 이행 절차" font="휴먼명조" size=1700 color=000000 bold=0
+        run "\t" font="휴먼명조" size=1700 color=000000 bold=0
+        run " 4" font="휴먼명조" size=1700 color=000000 bold=0
       para align=3 indent l=590 r=3115 first=0 space before=1000 after=0 line=200%
         seg textpos=0 vpos=30400 vsize=2000 th=2000 sp=2000 hpos=590 hsize=42503
         run " " font="휴먼명조" size=2000 color=000000 bold=0
         run "Ⅲ. 세부 내용" font="휴먼명조" size=2000 color=000000 bold=1
-        run "  5" font="휴먼명조" size=2000 color=000000 bold=0
+        run "\t" font="휴먼명조" size=2000 color=000000 bold=0
+        run " 5" font="휴먼명조" size=2000 color=000000 bold=0
       para align=3 indent l=590 r=3115 first=0 space before=0 after=0 line=200%
         seg textpos=0 vpos=34400 vsize=1700 th=1700 sp=1700 hpos=590 hsize=42503
-        run "    󰊱 윤리 기준  5" font="휴먼명조" size=1700 color=000000 bold=0
+        run "    󰊱 윤리 기준" font="휴먼명조" size=1700 color=000000 bold=0
+        run "\t" font="휴먼명조" size=1700 color=000000 bold=0
+        run " 5" font="휴먼명조" size=1700 color=000000 bold=0
       para align=3 indent l=590 r=3115 first=0 space before=0 after=0 line=200%
         seg textpos=0 vpos=37800 vsize=1700 th=1700 sp=1700 hpos=590 hsize=42503
-        run "    󰊲 점검 항목  10" font="휴먼명조" size=1700 color=000000 bold=0
+        run "    󰊲 점검 항목" font="휴먼명조" size=1700 color=000000 bold=0
+        run "\t" font="휴먼명조" size=1700 color=000000 bold=0
+        run " 10" font="휴먼명조" size=1700 color=000000 bold=0
       para align=3 indent l=500 r=3100 first=0 space before=2000 after=0 line=100%
         seg textpos=0 vpos=43200 vsize=1600 th=1600 sp=0 hpos=500 hsize=42608
         run "  《붙임》" font="휴먼명조" size=1500 color=000000 bold=1
         run "인공지능 윤리기준 세부 자율 점검사항" font="휴먼명조" size=1600 color=000000 bold=0
           metrics width=100,100,100,100,100,100,100 spacing=-2,-2,-2,-2,-2,-2,-2
-        run "  12" font="휴먼명조" size=1600 color=000000 bold=0
+        run "\t" font="휴먼명조" size=1600 color=000000 bold=0
+        run " 12" font="휴먼명조" size=1600 color=000000 bold=0
       para align=3 indent l=500 r=3100 first=0 space before=2000 after=0 line=100%
         seg textpos=0 vpos=46800 vsize=1600 th=1600 sp=0 hpos=500 hsize=42608
   -- flat paragraphs --
@@ -1930,9 +1950,13 @@ section 1 page=59528x84186 margin l=5669 r=5669 t=4251 b=4251 cols=1 gap=0 block
     seg textpos=0 vpos=0 vsize=1700 th=1700 sp=1192 hpos=0 hsize=48188
     run "󰊲 자율점검 항목 " font="HY헤드라인M" size=1700 color=000000 bold=0
     run "(총 68개)" font="HY헤드라인M" size=1200 color=000000 bold=0
+  para align=3 indent l=0 r=0 first=-3831 space before=0 after=0 line=170%
+    seg textpos=0 vpos=2892 vsize=1300 th=1300 sp=912 hpos=0 hsize=48188
+    run "  * 항목별 세부 자율점검 사항 : 붙임" font="맑은 고딕" size=1300 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=-2,-2,-2,-2,-2,-2,-2
   table rows=19 cols=3 w=48170 h=63913 cells=45
     repeat-header=1
-    pos: char=0 v=1791 h=0 wrap=0 vrel_para=1 hrel_para=1
+    pos: char=0 v=0 h=0 wrap=0 vrel_para=1 hrel_para=1
     header-cell=1
     cell r=0 c=0 rs=1 cs=1 w=5963 h=2048 fill=1:f0f0f0 pad=510,510,141,141
       borders l=1 r=1 t=1 b=1 colors=000000,000000,000000,000000 width=3
@@ -2235,10 +2259,6 @@ section 1 page=59528x84186 margin l=5669 r=5669 t=4251 b=4251 cols=1 gap=0 block
       para align=0 indent l=0 r=0 first=0 space before=0 after=0 line=130%
         seg textpos=0 vpos=0 vsize=1200 th=1200 sp=360 hpos=0 hsize=26732
         run "신고 및 구제 절차, 정보 주체 통제권 보장" font="맑은 고딕" size=1200 color=000000 bold=0
-  para align=3 indent l=0 r=0 first=-3831 space before=0 after=0 line=170%
-    seg textpos=0 vpos=2892 vsize=1300 th=1300 sp=912 hpos=0 hsize=48188
-    run "  * 항목별 세부 자율점검 사항 : 붙임" font="맑은 고딕" size=1300 color=000000 bold=0
-      metrics width=100,100,100,100,100,100,100 spacing=-2,-2,-2,-2,-2,-2,-2
   breaks page=0 column=0 saved=1
   table rows=1 cols=3 w=47971 h=3014 cells=3
     repeat-header=1

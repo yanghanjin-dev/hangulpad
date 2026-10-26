@@ -47,6 +47,20 @@ int main(void) {
     int i,total=0,offset=0;
     HDC dc=GetDC(NULL);
     {
+        hp_table t={0};
+        CHECK(table_origin_x(&t,76,718,594)==100); /* legacy/no anchor */
+        t.has_anchor_align=1;t.anchor_align=HP_ALIGN_RIGHT;
+        CHECK(table_origin_x(&t,76,718,594)==124);
+        t.outer_right_hwp=140;
+        CHECK(table_origin_x(&t,76,718,586)==130);
+        t.anchor_align=HP_ALIGN_LEFT;t.outer_left_hwp=150;
+        CHECK(table_origin_x(&t,76,718,586)==78);
+        t.anchor_align=HP_ALIGN_CENTER;t.outer_right_hwp=150;
+        CHECK(table_origin_x(&t,76,718,586)==104);
+        t.anchor_align=HP_ALIGN_RIGHT;
+        CHECK(table_origin_x(&t,76,718,642)==76); /* constrained cell */
+    }
+    {
         hp_run original={0}; HFONT font,previous; wchar_t face[LF_FACESIZE];
         original.font_face="Arial";original.font_size_hwp=1000;
         g_font_change_count=0;
@@ -70,7 +84,7 @@ int main(void) {
         original.italic=original.underline=original.strikeout=1;
         font=font_for_glyph(dc,&original,L"A",1);previous=SelectObject(dc,font);
         GetTextFaceW(dc,LF_FACESIZE,face);CHECK(_wcsicmp(face,L"Times New Roman")==0);
-        {LOGFONTW lf;GetObjectW(font,sizeof(lf),&lf);CHECK(lf.lfItalic && lf.lfUnderline && lf.lfStrikeOut);}
+        {LOGFONTW lf;GetObjectW(font,sizeof(lf),&lf);CHECK(lf.lfItalic && !lf.lfUnderline && lf.lfStrikeOut); /* custom advance-aware underline is tested in gui-decorations */}
         CHECK(strcmp(original.font_face,"Arial")==0 && g_font_change_count==0);
         SelectObject(dc,previous);DeleteObject(font);
         {hp_table_cell c={0};int top,center,bottom;
@@ -78,6 +92,48 @@ int main(void) {
          c.vertical_align=1;center=cell_vertical_offset(dc,&c,100,100);
          c.vertical_align=2;bottom=cell_vertical_offset(dc,&c,100,100);
          CHECK(top==0 && center==50 && bottom==100);}
+    }
+    {
+        hp_run metrics={0};double plain,spaced,narrow;
+        hp_paragraph p={0};hp_line_seg seg={0};int first,next,w1,w2;
+        metrics.font_face="Arial";metrics.font_size_hwp=1500;
+        plain=glyph_step(dc,&metrics,L".",1,0,0,0);
+        metrics.spacing_percent[1]=-16;
+        spaced=glyph_step(dc,&metrics,L".",1,0,0,0);
+        CHECK(spaced>plain*0.839 && spaced<plain*0.841);
+        CHECK(glyph_step(dc,&metrics,L" ",1,0,0,0)>8.399);
+        CHECK(glyph_step(dc,&metrics,L" ",1,0,0,0)<8.401);
+        metrics.use_font_space=1;narrow=glyph_step(dc,&metrics,L" ",1,0,0,0);
+        CHECK(narrow<8.0 && narrow>2.0);
+        p.indent_first_hwp=-3935;
+        w1=saved_line_box(&p,&seg,0,300,1,&first);w2=saved_line_box(&p,&seg,0,300,0,&next);
+        CHECK(first==0 && next==52 && w1==300 && w2==248);
+        p.indent_first_hwp=1500;
+        saved_line_box(&p,&seg,0,300,1,&first);saved_line_box(&p,&seg,0,300,0,&next);
+        CHECK(first==20 && next==0);
+        p.align=HP_ALIGN_JUSTIFY;p.indent_first_hwp=0;seg.horzsize_hwp=22500;
+        CHECK(saved_line_fits(&p,&seg,1,300,330));
+        CHECK(!saved_line_fits(&p,&seg,1,200,220));
+        seg.horzsize_hwp=0;CHECK(!saved_line_fits(&p,&seg,1,300,330));
+        CHECK(justified_gap(&p,L"AB CD 가나다",0,5,10,50,100)>0);
+        CHECK(!justification_gap(L"AB CD",0,0,5));
+        CHECK(justification_gap(L"AB CD",2,0,5));
+        CHECK(justified_gap(&p,L"AB CD",0,5,5,50,100)==0);
+        CHECK(justified_gap(&p,L"AB\nCD",0,3,5,50,100)==0);
+        CHECK(justified_gap(&p,L"가나다 라마",0,3,6,302,300)<0);
+    }
+    {
+        hp_document *sample=NULL;size_t si,bi;int found=0;
+        CHECK(hp_hwpx_read("sample/corpus/ethics.hwpx",&sample)==HP_OK);
+        for(si=0;si<sample->section_count;si++)for(bi=0;bi<sample->sections[si].block_count;bi++){
+            hp_table *t=sample->sections[si].blocks[bi].table;
+            if(sample->sections[si].blocks[bi].kind!=HP_BLOCK_TABLE||!t)continue;
+            if(t->width_hwp==44511||t->width_hwp==43945){
+                CHECK(t->has_anchor_align&&t->anchor_align==HP_ALIGN_RIGHT);found++;
+                if(t->width_hwp==43945)CHECK(t->outer_right_hwp==140);
+            }
+        }
+        CHECK(found==2);hp_document_free(sample);
     }
     hp_run run={0};hp_line_seg line={0};hp_paragraph para={0};
     int ends[128]={0},h;
@@ -236,6 +292,17 @@ int main(void) {
     CHECK(hp_section_add_paragraph_text(&g_doc->sections[1],"section two")==HP_OK);
     rebuild_flat();rebuild_pages(NULL);CHECK(g_page_count==2);
     CHECK(g_pages[1].section==1);use_section(1);CHECK(PAGE_W_PX==200 && PAGE_H_PX==200);free_doc();
+    /* Number zero in startNum means continue; an explicit start overrides it. */
+    g_doc=hp_document_new();small_page(&g_doc->sections[0]);
+    g_doc->sections[0].page_number_start=7;g_doc->sections[0].page_number_position=5;
+    CHECK(hp_section_add_paragraph_text(&g_doc->sections[0],"first section")==HP_OK);
+    g_doc->sections=(hp_section *)realloc(g_doc->sections,2*sizeof(hp_section));
+    memset(&g_doc->sections[1],0,sizeof(hp_section));g_doc->section_count=2;
+    small_page(&g_doc->sections[1]);g_doc->sections[1].page_number_position=-1;
+    CHECK(hp_section_add_paragraph_text(&g_doc->sections[1],"continued section")==HP_OK);
+    rebuild_flat();rebuild_pages(NULL);CHECK(g_page_count==2);
+    CHECK(g_pages[0].printed_number==7 && g_pages[1].printed_number==8 && g_pages[1].number_position==5);
+    g_doc->sections[1].page_number_start=20;rebuild_pages(NULL);CHECK(g_pages[1].printed_number==20);free_doc();
     {
         const char *samples[]={"sample/corpus/ethics.hwpx","sample/corpus/gyuje-규제합리화.hwpx","sample/corpus/mfds-프로프라놀롤.hwpx","tests/fixtures/table_pagination.hwpx"};
         int sample;
@@ -246,6 +313,12 @@ int main(void) {
             for(i=0;i<g_piece_count;i++)if(g_pieces[i].header_height>0)repeats++;
             printf("sample %d: pages=%d fragments=%d blocks=%d repeated_headers=%d fallback_cuts=%d suppressed_headers=%d\n",sample,g_page_count,g_piece_count,g_flat_count,repeats,g_unsafe_table_cuts,g_suppressed_headers);
             {const int expected[]={17,20,4,2};CHECK(g_page_count==expected[sample] && g_unsafe_table_cuts==0);}
+            if(sample==0) {
+                CHECK(g_pages[0].number_hidden && g_pages[1].number_hidden);
+                for(i=2;i<17;i++)CHECK(!g_pages[i].number_hidden && g_pages[i].printed_number==i-1 && g_pages[i].number_position==5);
+            } else if(sample==1 || sample==2) {
+                for(i=0;i<g_page_count;i++)CHECK(!g_pages[i].number_hidden && g_pages[i].printed_number==i+1);
+            }
             if(sample==3)CHECK(repeats==1);
             for(block=0;block<g_flat_count;block++) {
                 int end=0,found=0;
@@ -260,5 +333,33 @@ int main(void) {
             free_doc();
         }
     }
+    /* A restart late on a page labels that entire page; hiding lasts one page. */
+    g_doc=hp_document_new();small_page(&g_doc->sections[0]);
+    g_doc->sections[0].page_number_start=7;g_doc->sections[0].page_number_position=5;
+    g_doc->sections[0].hide_first_page_number=1;strcpy(g_doc->sections[0].page_number_side,"-");
+    CHECK(hp_section_add_paragraph_text(&g_doc->sections[0],"before restart")==HP_OK);
+    CHECK(hp_section_add_paragraph_text(&g_doc->sections[0],"restart on this page")==HP_OK);
+    g_doc->sections[0].blocks[1].page_number_reset=3;
+    for(i=0;i<3;i++) {
+        CHECK(hp_section_add_paragraph_text(&g_doc->sections[0],"next page")==HP_OK);
+        g_doc->sections[0].blocks[2+i].page_break_before=1;
+    }
+    g_doc->sections[0].blocks[3].hide_page_number=1;
+    rebuild_flat();rebuild_pages(NULL);CHECK(g_page_count==4);
+    CHECK(g_pages[0].printed_number==3 && g_pages[0].number_hidden);
+    CHECK(g_pages[1].printed_number==4 && !g_pages[1].number_hidden);
+    CHECK(g_pages[2].printed_number==5 && g_pages[2].number_hidden);
+    CHECK(g_pages[3].printed_number==6 && !g_pages[3].number_hidden);free_doc();
+    /* Page controls anchored to a continued table execute only on its first fragment. */
+    table_document(4,100);g_doc->sections[0].page_number_position=5;
+    g_doc->sections[0].blocks[0].page_number_reset=12;
+    g_doc->sections[0].blocks[0].hide_page_number=1;
+    rebuild_flat();rebuild_pages(NULL);CHECK(g_page_count>=2);
+    CHECK(g_pages[0].printed_number==12 && g_pages[0].number_hidden);
+    CHECK(g_pages[1].printed_number==13 && !g_pages[1].number_hidden);free_doc();
     puts("GDI text, section, column and table-fragment tests passed");return 0;
 }
+
+
+
+

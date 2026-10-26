@@ -50,6 +50,10 @@ typedef struct hp_run {
     int italic;
     int underline;
     int strikeout;
+    int use_font_space; /* 0: HWP half-em spaces, 1: physical font space advance */
+    uint32_t tab_width_hwp; /* a dedicated tab run retains its saved advance */
+    int tab_leader;
+    int tab_align_right;
     /* Original per-script faces; font_face remains the default/Hangul face. */
     char script_faces[7][256];
     /* HANGUL, LATIN, HANJA, JAPANESE, OTHER, SYMBOL, USER; zero ratio = 100%. */
@@ -85,16 +89,22 @@ typedef struct hp_paragraph {
     size_t seg_count;
 } hp_paragraph;
 
+typedef enum hp_border_line {
+    HP_BORDER_SOLID=0, HP_BORDER_DASH, HP_BORDER_DOT,
+    HP_BORDER_DASH_DOT, HP_BORDER_DASH_DOT_DOT, HP_BORDER_LONG_DASH, HP_BORDER_DOUBLE_SLIM
+} hp_border_line;
 typedef struct hp_borders {
     int left;
     int right;
     int top;
-    int bottom; /* 1 = solid side */
+    int bottom; /* nonzero = visible side; line pattern is stored separately */
+    hp_border_line style_left, style_right, style_top, style_bottom;
     uint32_t color_left;
     uint32_t color_right;
     uint32_t color_top;
     uint32_t color_bottom;
     int width_px;
+    int width_left, width_right, width_top, width_bottom;
 } hp_borders;
 
 typedef struct hp_image {
@@ -148,6 +158,10 @@ typedef struct hp_table {
     int row_count;
     int col_count;
     int repeat_header;
+    int has_anchor_align;
+    hp_align anchor_align; /* inline tables inherit their containing paragraph */
+    int32_t anchor_left_hwp, anchor_right_hwp;
+    uint32_t outer_left_hwp, outer_right_hwp;
     uint32_t width_hwp;
     uint32_t height_hwp;
     hp_table_cell *cells;
@@ -173,6 +187,8 @@ typedef struct hp_block {
     int saved_break_before; /* saved page/column coordinates restarted */
     int has_saved_y;
     uint32_t saved_y_hwp; /* position of the source paragraph's first line */
+    int page_number_reset; /* newNum PAGE: affects the page containing this block */
+    int hide_page_number; /* pageHiding: this page only */
     hp_paragraph paragraph;
     hp_table *table;
     hp_image *image;
@@ -193,6 +209,12 @@ typedef struct hp_page {
 
 typedef struct hp_section {
     hp_page page;
+    int page_number_start; /* 0 continues from the preceding section */
+    int hide_first_page_number;
+    /* -1 absent/inherit, 0 NONE, 1..3 top L/C/R, 4..6 bottom L/C/R,
+     * 7/8 top/bottom outside, 9/10 top/bottom inside. */
+    int page_number_position;
+    char page_number_side[16];
     int column_count;
     uint32_t column_gap_hwp;
     hp_block *blocks;
@@ -238,3 +260,6 @@ int32_t hp_hwp_signed(uint32_t raw); /* interpret HWPUNIT as signed */
 #endif
 
 #endif /* HP_IR_H */
+
+
+
