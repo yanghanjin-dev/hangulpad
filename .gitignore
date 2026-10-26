@@ -1,0 +1,17 @@
+/build/
+/dist/
+*.o
+*.a
+*.so
+*.exe
+*.dll
+*.obj
+*.swp
+.DS_Store
+.idea/
+.vscode/
+*.hwpx.bak
+/tmp/
+/target/
+CMakeUserPresets.json
+*.user

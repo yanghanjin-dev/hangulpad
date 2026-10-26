@@ -1,0 +1,23 @@
+HangulPad
+Copyright 2026 HangulPad contributors
+
+This product includes software developed as part of the HangulPad project.
+
+---------------------------------------------------------------------------
+Hancom / HWP · OWPML attribution (placeholder)
+
+본 제품은 한글과컴퓨터의 HWP 문서 파일(.hwp) 공개 문서를 참고하여 개발하였습니다.
+
+This product was developed with reference to Hancom's publicly disclosed
+HWP document file (.hwp) specifications.
+
+HWPX / OWPML packaging follows publicly available KS X 6101 / Hancom OWPML
+documentation. Hancom does not warrant the accuracy of third-party
+implementations based on those specifications.
+
+Spec documents themselves are not redistributed in this repository; obtain
+them from Hancom's official download center when needed.
+---------------------------------------------------------------------------
+
+Third-party crates used by this workspace retain their own licenses; see
+Cargo.lock / crates.io metadata for details.

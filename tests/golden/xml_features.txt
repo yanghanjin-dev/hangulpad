@@ -1,0 +1,47 @@
+title="XML 기능 & 테스트" lang="ko" sections=2
+section 0 page=59528x84188 margin l=5669 r=5669 t=5669 b=4252 cols=1 gap=0 blocks=6 paras=5
+  para align=0 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+    run "숫자참조 가나 끝" font="맑은 고딕" size=1000 color=000000 bold=0
+  para align=0 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+    run "<raw> & text" font="맑은 고딕" size=1600 color=ff0000 bold=1
+  para align=0 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+    run "주석 사이" font="맑은 고딕" size=1000 color=000000 bold=0
+  para align=0 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+    seg textpos=0 vpos=0 vsize=2000 th=2000 sp=600 hpos=0 hsize=42000
+    run "표 앞 글자" font="맑은 고딕" size=1000 color=000000 bold=0
+  table rows=1 cols=2 w=20000 h=2000 cells=2
+    pos: char=1 v=0 h=0 wrap=0 vrel_para=1 hrel_para=1
+    cell r=0 c=0 rs=1 cs=1 w=10000 h=2000 fill=0:000000 pad=100,100,50,50
+      borders l=0 r=0 t=0 b=0 colors=000000,000000,000000,000000 width=0
+      para align=0 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+        run "A1" font="맑은 고딕" size=1000 color=000000 bold=0
+    cell r=0 c=1 rs=1 cs=1 w=10000 h=2000 fill=0:000000 pad=140,140,140,140
+      borders l=0 r=0 t=0 b=0 colors=000000,000000,000000,000000 width=0
+      para align=0 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+        object-anchor-only=1
+      table rows=1 cols=1 w=5000 h=1000 cells=1
+        pos: none
+        cell r=0 c=0 rs=1 cs=1 w=5000 h=1000 fill=0:000000 pad=140,140,140,140
+          borders l=0 r=0 t=0 b=0 colors=000000,000000,000000,000000 width=0
+          para align=0 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+            run "안쪽" font="맑은 고딕" size=1000 color=000000 bold=0
+  para align=0 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+    run "표 뒤 글자" font="맑은 고딕" size=1000 color=000000 bold=0
+  -- flat paragraphs --
+  para align=0 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+    run "숫자참조 가나 끝" font="맑은 고딕" size=1000 color=000000 bold=0
+  para align=0 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+    run "<raw> & text" font="맑은 고딕" size=1600 color=ff0000 bold=1
+  para align=0 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+    run "주석 사이" font="맑은 고딕" size=1000 color=000000 bold=0
+  para align=0 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+    seg textpos=0 vpos=0 vsize=2000 th=2000 sp=600 hpos=0 hsize=42000
+    run "표 앞 글자" font="맑은 고딕" size=1000 color=000000 bold=0
+  para align=0 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+    run "표 뒤 글자" font="맑은 고딕" size=1000 color=000000 bold=0
+section 1 page=59528x84188 margin l=5669 r=5669 t=5669 b=4252 cols=1 gap=0 blocks=1 paras=1
+  para align=0 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+    run "둘째 구역 & <끝>" font="맑은 고딕" size=1000 color=000000 bold=0
+  -- flat paragraphs --
+  para align=0 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+    run "둘째 구역 & <끝>" font="맑은 고딕" size=1000 color=000000 bold=0

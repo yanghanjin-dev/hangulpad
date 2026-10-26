@@ -1,0 +1,47 @@
+{
+  "platform": "Windows-11-10.0.26300-SP0",
+  "dpi": 96,
+  "cases": {
+    "ethics": {
+      "source_sha256": "739ab3bd72265b4ff28a644a901cacf914c576917113acf517647a70d8e9b8b5",
+      "pages": 17,
+      "fallback_cuts": 0,
+      "images": {
+        "ethics-001.png": "66d7fdf730229cdfe1639f3a7461fb2aee5868e0275c2a218a581d15b72961ab",
+        "ethics-005.png": "805bd7039cba08f2dbf4daba5719f6b87c589a45b63ad6791edbe1b8b0132dcc",
+        "ethics-006.png": "8d9520d5980890df01c847418763a6de8da7e4c178e5a44db38464a2c0670055",
+        "ethics-014.png": "df2d4dc328d4befbbe6d0ddb5d812705be698c83aa41018d862844073befcbc2",
+        "ethics-017.png": "f820ab3da6b86fff90b8e0ba83193c5aff348af0b6c08f9f41d7d62c29799dae"
+      }
+    },
+    "gyuje": {
+      "source_sha256": "0897f70cb089cd22f3c67e9ee8a77103083511a8c49a6f48468edb360bd4ce65",
+      "pages": 20,
+      "fallback_cuts": 0,
+      "images": {
+        "gyuje-001.png": "6e1a1554a1f5de4a61725653e87ca59378d2467ad4450ddd4b01b592003ce6c3",
+        "gyuje-004.png": "8a05cb9b9fbf11d75130245704d484402a47aa470f2a6a8864f76ab110a58a8f",
+        "gyuje-018.png": "2e118d5da68ac3fee6c23c9f09059919d484a45dc948605d63cebdc658405af7",
+        "gyuje-020.png": "28d188c03464e305f57464a7d14cfaf3f1d35eeef7c34796cee0b804833d92fa"
+      }
+    },
+    "mfds": {
+      "source_sha256": "5233e4e2075295f642b779adf2f02727152b8451356b433e2deef38c86c1905e",
+      "pages": 4,
+      "fallback_cuts": 0,
+      "images": {
+        "mfds-001.png": "e2e4238e67f8060d4ef0da64540fa18eaccb432c227f149d91d4d90a5b9befa2",
+        "mfds-004.png": "1ba1b8565cef14de94d237df8720508e9fb5b63de350735106dc615c2847e31d"
+      }
+    },
+    "merged": {
+      "source_sha256": "06b2c600174111b73a7e9f6c1590ee8d4b29c4e19e779d999bb023f554595fbb",
+      "pages": 2,
+      "fallback_cuts": 0,
+      "images": {
+        "merged-001.png": "53fa2395d4ec7227afee4acf4b7eae583dbb5c63939b2e528de5e8ae2d8feaf5",
+        "merged-002.png": "8deb0a122898ea227e44a989875a3793c86dae4f9e3bcc382fc2eeaf02e0f407"
+      }
+    }
+  }
+}

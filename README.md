@@ -1,1 +1,163 @@
-# hangulpad
+# 한글패드 / HangulPad
+
+가볍고 단순한 한글 워드 프로세서를 목표로 하는 오픈소스 프로젝트입니다.  
+C11 문서 엔진과 Windows Win32 문서 보기 UI를 개발하고 있습니다.
+
+A lightweight Korean word processor with a C11 HWPX engine and a Windows viewer.
+
+> **기본 개발 환경:** Windows PowerShell / MSYS2 UCRT64 / CMake / Ninja.
+
+**현재 버전: 0.7.0** (2026-10-26) — 변경 내역은 [`CHANGELOG.md`](CHANGELOG.md)
+
+## Status (Phase 0–1 scaffold)
+
+| Area | Status |
+|------|--------|
+| `hp` IR (`include/hp/ir.h`) | MVP (paragraph / run / section) |
+| XML parser (`src/xml.c`) | Own dependency-free DOM parser: entities, char refs, CDATA, namespaces (local names), byte spans for lossless patching, depth limit 512, fuzzed |
+| HWPX read/write | Read: paragraphs/styles/tables/images/floats/equations. **Save is lossless** for opened files — every original part is kept byte-for-byte; only changed parts are regenerated (appended paragraphs are inserted into the original section XML, title is patched in `content.hpf`). New documents get a minimal package. |
+| HWP 5.x | **Read stub** (CFB detect only) |
+| CLI (`build/hp`) | `open` / `new` / `save` / `append` / `roundtrip` / `probe` / `--version` (UTF-8/Korean paths on Windows) |
+| Desktop UI (Windows) | `HangulPad.exe` engine layout (fonts, tables/nested, images, floats, containers, equations) |
+| Full HWP record parse / HWP write | Deferred |
+
+GUI 0.7.0은 명시적 페이지/단 나눔·구역별 용지 설정과 긴 표/문단의 페이지 분할을 지원합니다.
+문자 종류별 원본 글꼴을 유지하고 누락 문자에 대체 글꼴을 적용하며, 도움말의 대체 글꼴 내역에서 적용 결과를 확인할 수 있습니다.
+셀 정렬·여백 상속, 그림 잘라내기와 저장 기준선·세로 위치도 반영합니다. [0.7.0 서식·배치 검증](docs/font-layout-update-2026-10-26.md).
+원본 글꼴이 설치되어 있으면 우선 사용하며 언어별 장평·자간, 셀 안 정렬·줄바꿈을 반영합니다.
+반복 설정과 제목 셀 표시가 있는 표는 다음 페이지에 머리행을 반복합니다. 병합 셀과 중첩 표의
+실제 글자 영역을 함께 검사해 가능한 경우 글자 사이에서 분할하고, 잘린 셀의 경계선을 표시합니다.
+페이지 수와 화면이 한컴 출력과 완전히 같다는 의미는 아닙니다. 머리행과 본문을 가로지르는 병합,
+페이지보다 큰 개체, 중첩 표 자체의 머리행 반복 및 탭/양쪽 정렬/부동 개체는 추가 개선 대상입니다.
+현재 3종 샘플은 원본 PDF와 같은 17/20/4쪽으로 배치되지만, 글꼴·기호·상대 크기·세부 배치 차이는 남아 있습니다.
+검증 결과: [0.6.0 페이지 수 개선 보고서](docs/layout-v060-2026-10-26.md),
+[0.5.0 표 분할 보고서](docs/table-pagination-v050-2026-10-26.md),
+[0.4.0 레이아웃 보고서](docs/layout-v040-2026-10-26.md).
+
+Default save format: **HWPX**.
+
+## Layout
+
+```
+include/hp/   Public headers (ir, hwpx, hwp, common)
+src/          Engine + CLI sources (xml.c = XML parser, hwpx_read.c / hwpx_write.c, gui_win.c)
+tests/        Unit tests, fixtures, golden IR dumps (tests/golden), fuzzers (tests/fuzz)
+CMakeLists.txt  Windows build / CTest / ZIP packaging
+```
+
+## Build & test — Windows (기본)
+
+WSL 없이 Windows PowerShell에서 CLI·GUI·C 테스트를 빌드합니다.
+기본 도구는 MSYS2 **UCRT64 GCC + CMake + Ninja + libzip**입니다.
+MSVC는 현재 검증 대상이 아닙니다.
+
+### 최초 준비
+
+1. https://www.msys2.org/ 에서 MSYS2를 설치합니다 (기본 경로 `C:\msys64`).
+2. MSYS2 UCRT64 창에서 다음을 실행합니다. 업데이트가 창 종료를 요청하면 다시 열어 진행합니다.
+
+```sh
+pacman -Syu
+pacman -S --needed mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x86_64-ninja mingw-w64-ucrt-x86_64-libzip
+```
+
+### PowerShell에서 개발
+
+소스 폴더 (`CMakeLists.txt`가 있는 폴더)에서 실행합니다.
+
+```powershell
+# 빌드 + XML/왕복/샘플 golden 회귀 검사
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-windows.ps1
+# 주요 페이지 이미지 회귀 검사 (Python + Pillow 필요)
+.\scripts\build-windows.ps1 -Action VisualTest -PythonExe python
+# 빌드만
+.\scripts\build-windows.ps1 -Action Build
+# 테스트 통과 후 EXE·DLL·샘플·라이선스를 ZIP으로 패키징
+.\scripts\build-windows.ps1 -Action Package
+# 다른 MSYS2 설치 위치 / 디버그 구성
+.\scripts\build-windows.ps1 -ToolchainRoot D:\msys64\ucrt64 -Configuration Debug
+```
+
+실행 정책에 의해 `.ps1` 직접 실행이 제한되면 첫 명령과 동일하게
+`powershell -NoProfile -ExecutionPolicy Bypass -File` 뒤에 스크립트와 인수를 전달하세요.
+시스템 실행 정책은 변경하지 않습니다.
+
+결과: `build/windows-release/hp.exe`, `build/windows-release/HangulPad.exe`.
+로컬 실행에는 UCRT64 `bin`이 PATH에 있어야 합니다. GUI는 파일 메뉴로 샘플을 엽니다.
+배포 ZIP은 `dist/`에 생성되며 의존 DLL과 `documents/`가 함께 들어갑니다.
+스크립트는 필요한 동안만 PATH를 설정하고 종료 시 복원합니다.
+
+```powershell
+$env:PATH = "C:\msys64\ucrt64\bin;$env:PATH"
+.\build\windows-release\hp.exe --version
+.\build\windows-release\HangulPad.exe
+.\build\windows-release\hp.exe new .\demo.hwpx --text "한글패드" --title "샘플"
+.\build\windows-release\hp.exe append .\demo.hwpx .\추가.hwpx --text "추가 문단"
+```
+
+테스트 임시 파일은 `build/windows-release/test-work/`에 둡니다 (테스트 입력은 `ctest` 실행마다 원본에서 새로 복사).
+Golden 검사는 원본 `tests/golden/`을 직접 읽어 전체 IR을 비교합니다.
+
+의도적인 리더 변경 시 golden 갱신 (LF로 기록되어 Linux와 바이트 동일):
+
+```powershell
+.\scripts\build-windows.ps1 -Action GoldenUpdate   # 그 다음 tests\golden 변경 내용을 검토
+```
+
+> PowerShell의 `irdump.exe ... > 파일` 리디렉션은 쓰지 마세요 (Windows PowerShell 5.1은 UTF-16으로 저장해 golden이 깨집니다).
+
+**Synology Drive / OneDrive 폴더에서 개발할 때:** 빌드 폴더(`build/`, `dist/`)는 동기화에서 제외하거나
+`-BuildRoot "$env:LOCALAPPDATA\hangulpad-build"` 처럼 동기화 밖에 두세요. 빌드 중 동기화 프로그램이
+파일을 잠가 빌드·테스트가 실패하거나, 수천 개의 빌드 파일이 NAS로 올라갈 수 있습니다.
+
+**메모리 검사:** MinGW에는 AddressSanitizer가 없어 Windows 빌드로는 메모리 오류·누수를 검사할 수 없습니다.
+CI의 Linux 작업이 ASan/UBSan 검사를 맡습니다 (로컬: Linux/WSL에서 `make all CFLAGS=... -fsanitize=address,undefined`).
+
+### Linux / 기존 크로스 빌드 (보조)
+
+기존 GNU Make 명령은 `Makefile.posix`에 보존돼 있습니다. Linux에서는
+`make all`, `make golden-update`, `make fuzz`를 계속 사용할 수 있습니다.
+Windows 기본 경로는 PowerShell/CMake이며 GNU Make 설치는 필요 없습니다.
+퍼징은 기존 clang/libFuzzer POSIX 경로로 유지합니다.
+
+Saving never deletes the target first: libzip writes a temporary file and replaces
+the target only after a successful write, and a read-only target is refused.
+
+For opened documents, saving existing-content edits (`needs_rewrite`), removing
+loaded paragraphs, or changing the section mapping returns `HP_ERR_UNSUPPORTED`.
+If appending cannot preserve the original section XML, saving also fails instead
+of regenerating that section as plain text. The existing destination is retained.
+Supported edits remain appended plain-text paragraphs and title changes; this is
+not a general-purpose lossless editor for arbitrary IR changes.
+
+## 버전 규칙
+
+버전은 [유의적 버전(SemVer)](https://semver.org/lang/ko/) `MAJOR.MINOR.PATCH` 를 따르고,
+번호는 **`include/hp/version.h` 한 곳에서만** 정합니다 (Makefile·CLI·GUI·exe 속성·
+새 문서의 `version.xml`·포터블 패키지 이름이 모두 여기서 가져갑니다).
+
+| 자리 | 올리는 경우 |
+|---|---|
+| MAJOR | 1.0 = 편집 화면 + HWP 읽기 완성. 그 뒤로는 호환이 깨지는 변경 |
+| MINOR | 기능 추가, 파일 형식 동작 변경 (예: 원본 보존 저장) |
+| PATCH | 버그 수정만 |
+
+개발할 때마다:
+1. `include/hp/version.h` 의 `HP_VERSION_MAJOR/MINOR/PATCH`, `HP_VERSION_STRING`,
+   `HP_VERSION_COMMAS`, `HP_VERSION_DATE` 를 함께 올립니다 (`CTest`가 일치 여부를 검사).
+2. `CHANGELOG.md` 맨 위에 새 버전 항목(추가/수정/변경)을 씁니다.
+3. 빌드·테스트 후 Windows 포터블을 다시 만듭니다. 확인: `hp.exe --version`, ZIP 파일 이름.
+
+## License
+
+MIT OR Apache-2.0 — see [`LICENSE`](LICENSE), [`LICENSE-MIT`](LICENSE-MIT), [`LICENSE-APACHE`](LICENSE-APACHE).
+
+## Attribution
+
+See [`NOTICE`](NOTICE) for the Hancom HWP / OWPML attribution placeholder required when referencing Hancom's public format documentation.
+
+## Non-goals (this PR)
+
+- Tables/shapes/headers full fidelity (paragraph text styles are rendered)
+- Binary HWP write
+- Complete WordPad-class editing UI

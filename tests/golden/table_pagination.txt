@@ -1,0 +1,37 @@
+title="simple_paragraph" lang="ko" sections=1
+section 0 page=59528x84188 margin l=6000 r=6000 t=5600 b=4252 cols=1 gap=0 blocks=1 paras=0
+  table rows=4 cols=2 w=47528 h=94000 cells=5
+    repeat-header=1
+    pos: none
+    header-cell=1
+    cell r=0 c=0 rs=1 cs=2 w=47528 h=4000 fill=0:000000 pad=150,150,150,150
+      borders l=0 r=0 t=0 b=0 colors=000000,000000,000000,000000 width=0
+      para align=3 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+        run "REPEATED HEADER - MERGED CELL CONTINUATION" font="맑은 고딕" size=1000 color=000000 bold=0
+    cell r=1 c=0 rs=3 cs=1 w=23764 h=90000 fill=0:000000 pad=150,150,150,150
+      borders l=0 r=0 t=0 b=0 colors=000000,000000,000000,000000 width=0
+      para align=3 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+        run "MERGED LEFT - LINE 01\nMERGED LEFT - LINE 02\nMERGED LEFT - LINE 03\nMERGED LEFT - LINE 04\nMERGED LEFT - LINE 05\nMERGED LEFT - LINE 06\nMERGED LEFT - LINE 07\nMERGED LEFT - LINE 08\nMERGED LEFT - LINE 09\nMERGED LEFT - LINE 10\nMERGED LEFT - LINE 11\nMERGED LEFT - LINE 12\nMERGED LEFT - LINE 13\nMERGED LEFT - LINE 14\nMERGED LEFT - LINE 15\nMERGED LEFT - LINE 16\nMERGED LEFT - LINE 17\nMERGED LEFT - LINE 18\nMERGED LEFT - LINE 19\nMERGED LEFT - LINE 20\nMERGED LEFT - LINE 21\nMERGED LEFT - LINE 22\nMERGED LEFT - LINE 23\nMERGED LEFT - LINE 24\nMERGED LEFT - LINE 25\nMERGED LEFT - LINE 26\nMERGED LEFT - LINE 27\nMERGED LEFT - LINE 28\nMERGED LEFT - LINE 29\nMERGED LEFT - LINE 30\nMERGED LEFT - LINE 31\nMERGED LEFT - LINE 32\nMERGED LEFT - LINE 33\nMERGED LEFT - LINE 34\nMERGED LEFT - LINE 35\nMERGED LEFT - LINE 36\nMERGED LEFT - LINE 37\nMERGED LEFT - LINE 38\nMERGED LEFT - LINE 39\nMERGED LEFT - LINE 40\nMERGED LEFT - LINE 41\nMERGED LEFT - LINE 42\nMERGED LEFT - LINE 43\nMERGED LEFT - LINE 44\nMERGED LEFT - LINE 45\nMERGED LEFT - LINE 46\nMERGED LEFT - LINE 47\nMERGED LEFT - LINE 48\nMERGED LEFT - LINE 49\nMERGED LEFT - LINE 50\nMERGED LEFT - LINE 51\nMERGED LEFT - LINE 52\nMERGED LEFT - LINE 53\nMERGED LEFT - LINE 54\nMERGED LEFT - LINE 55\nMERGED LEFT - LINE 56\nMERGED LEFT - LINE 57\nMERGED LEFT - LINE 58\nMERGED LEFT - LINE 59\nMERGED LEFT - LINE 60\nMERGED LEFT - LINE 61\nMERGED LEFT - LINE 62\nMERGED LEFT - LINE 63\nMERGED LEFT - LINE 64\nMERGED LEFT - LINE 65" font="맑은 고딕" size=1000 color=000000 bold=0
+    cell r=1 c=1 rs=1 cs=1 w=23764 h=30000 fill=0:000000 pad=150,150,150,150
+      borders l=0 r=0 t=0 b=0 colors=000000,000000,000000,000000 width=0
+      para align=3 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+        run "RIGHT FIRST - LINE 01\nRIGHT FIRST - LINE 02\nRIGHT FIRST - LINE 03\nRIGHT FIRST - LINE 04\nRIGHT FIRST - LINE 05\nRIGHT FIRST - LINE 06\nRIGHT FIRST - LINE 07\nRIGHT FIRST - LINE 08\nRIGHT FIRST - LINE 09\nRIGHT FIRST - LINE 10\nRIGHT FIRST - LINE 11\nRIGHT FIRST - LINE 12\nRIGHT FIRST - LINE 13\nRIGHT FIRST - LINE 14" font="맑은 고딕" size=1000 color=000000 bold=0
+    cell r=2 c=1 rs=1 cs=1 w=23764 h=30000 fill=0:000000 pad=150,150,150,150
+      borders l=0 r=0 t=0 b=0 colors=000000,000000,000000,000000 width=0
+      para align=3 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+        run "RIGHT MIDDLE - LINE 01\nRIGHT MIDDLE - LINE 02\nRIGHT MIDDLE - LINE 03\nRIGHT MIDDLE - LINE 04\nRIGHT MIDDLE - LINE 05\nRIGHT MIDDLE - LINE 06\nRIGHT MIDDLE - LINE 07\nRIGHT MIDDLE - LINE 08\nRIGHT MIDDLE - LINE 09\nRIGHT MIDDLE - LINE 10\nRIGHT MIDDLE - LINE 11\nRIGHT MIDDLE - LINE 12\nRIGHT MIDDLE - LINE 13\nRIGHT MIDDLE - LINE 14" font="맑은 고딕" size=1000 color=000000 bold=0
+    cell r=3 c=1 rs=1 cs=1 w=23764 h=30000 fill=0:000000 pad=150,150,150,150
+      borders l=0 r=0 t=0 b=0 colors=000000,000000,000000,000000 width=0
+      para align=3 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+        run "RIGHT LAST - LINE 01\nRIGHT LAST - LINE 02\nRIGHT LAST - LINE 03\nRIGHT LAST - LINE 04\nRIGHT LAST - LINE 05\nRIGHT LAST - LINE 06\nRIGHT LAST - LINE 07\nRIGHT LAST - LINE 08\nRIGHT LAST - LINE 09\nRIGHT LAST - LINE 10\nRIGHT LAST - LINE 11\nRIGHT LAST - LINE 12\nRIGHT LAST - LINE 13\nRIGHT LAST - LINE 14" font="맑은 고딕" size=1000 color=000000 bold=0
+      table rows=2 cols=1 w=22500 h=6000 cells=2
+        pos: none
+        cell r=0 c=0 rs=1 cs=1 w=23764 h=3000 fill=0:000000 pad=150,150,150,150
+          borders l=0 r=0 t=0 b=0 colors=000000,000000,000000,000000 width=0
+          para align=3 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+            run "NESTED CELL A" font="맑은 고딕" size=1000 color=000000 bold=0
+        cell r=1 c=0 rs=1 cs=1 w=23764 h=3000 fill=0:000000 pad=150,150,150,150
+          borders l=0 r=0 t=0 b=0 colors=000000,000000,000000,000000 width=0
+          para align=3 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+            run "NESTED CELL B" font="맑은 고딕" size=1000 color=000000 bold=0
+  -- flat paragraphs --

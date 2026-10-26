@@ -1,0 +1,18 @@
+* text=auto eol=lf
+*.c text eol=lf
+*.h text eol=lf
+*.cmake text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.yml text eol=lf
+*.py text eol=lf
+*.ps1 text eol=crlf
+*.rc text eol=crlf
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.bmp binary
+*.hwpx binary
+*.pdf binary
+*.zip binary
+tests/golden/** text eol=lf

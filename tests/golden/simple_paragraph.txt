@@ -1,0 +1,9 @@
+title="simple_paragraph" lang="ko" sections=1
+section 0 page=59528x84188 margin l=5669 r=5669 t=5669 b=4252 cols=1 gap=0 blocks=2 paras=1
+  para align=3 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+    run "" font="맑은 고딕" size=1000 color=000000 bold=0
+  para align=3 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+    run "한글패드" font="맑은 고딕" size=1000 color=000000 bold=0
+  -- flat paragraphs --
+  para align=3 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+    run "한글패드" font="맑은 고딕" size=1000 color=000000 bold=0

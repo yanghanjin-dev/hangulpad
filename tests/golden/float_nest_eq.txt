@@ -1,0 +1,26 @@
+title="□기본 방향" lang="ko" sections=1
+section 0 page=59528x84188 margin l=5669 r=5669 t=5669 b=4252 cols=1 gap=0 blocks=3 paras=1
+  para align=3 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+    run "수식 테스트 " font="맑은 고딕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=-9,-9,-9,-9,-9,-9,-9
+  equation script="E=mc^2" size=1200
+  table rows=1 cols=1 w=20000 h=8000 cells=1
+    pos: char=0 v=0 h=500 wrap=0 vrel_para=1 hrel_para=1
+    cell r=0 c=0 rs=1 cs=1 w=20000 h=8000 fill=0:000000 pad=140,140,140,140
+      borders l=0 r=0 t=0 b=0 colors=000000,000000,000000,000000 width=0
+      para align=3 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+        run "outer" font="맑은 고딕" size=1400 color=000000 bold=0
+          metrics width=100,100,100,100,100,100,100 spacing=-9,-9,-9,-9,-9,-9,-9
+      para align=3 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+        object-anchor-only=1
+      table rows=1 cols=1 w=10000 h=3000 cells=1
+        pos: char=1 v=0 h=0 wrap=0 vrel_para=1 hrel_para=1
+        cell r=0 c=0 rs=1 cs=1 w=10000 h=3000 fill=0:000000 pad=140,140,140,140
+          borders l=0 r=0 t=0 b=0 colors=000000,000000,000000,000000 width=0
+          para align=3 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+            run "nested" font="맑은 고딕" size=1400 color=000000 bold=0
+              metrics width=100,100,100,100,100,100,100 spacing=-9,-9,-9,-9,-9,-9,-9
+  -- flat paragraphs --
+  para align=3 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+    run "수식 테스트 " font="맑은 고딕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=-9,-9,-9,-9,-9,-9,-9

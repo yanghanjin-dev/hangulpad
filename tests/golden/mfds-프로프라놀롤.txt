@@ -1,0 +1,959 @@
+title="3" lang="ko" sections=1
+section 0 page=59528x84188 margin l=5669 r=5669 t=4251 b=4251 cols=1 gap=0 blocks=27 paras=9
+  table rows=1 cols=3 w=47414 h=3481 cells=3
+    repeat-header=1
+    pos: char=1 v=0 h=0 wrap=0 vrel_para=1 hrel_para=1
+    cell r=0 c=0 rs=1 cs=1 w=13352 h=2994 fill=0:000000 pad=141,141,141,141
+      borders l=1 r=0 t=1 b=1 colors=000000,000000,000000,000000 width=1
+      para align=1 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+        object-anchor-only=1
+        seg textpos=0 vpos=0 vsize=1000 th=1000 sp=600 hpos=0 hsize=0
+      image id="image1" bytes=7140 hash=f3f32677 w=12251 h=2712
+        pos: char=0 v=0 h=0 wrap=1 vrel_para=1 hrel_para=1
+    cell r=0 c=1 rs=1 cs=1 w=18729 h=2994 fill=0:000000 pad=141,141,141,141
+      borders l=0 r=0 t=1 b=1 colors=000000,000000,000000,000000 width=1
+      para align=1 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+        seg textpos=0 vpos=0 vsize=1400 th=1400 sp=840 hpos=0 hsize=18444
+        run "보도참고자료" font="함초롬바탕" size=1400 color=000000 bold=0
+    cell r=0 c=2 rs=1 cs=1 w=15333 h=2994 fill=0:000000 pad=141,141,141,141
+      borders l=0 r=1 t=1 b=1 colors=000000,000000,000000,000000 width=1
+      para align=1 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+        object-anchor-only=1
+        seg textpos=0 vpos=0 vsize=3199 th=3199 sp=720 hpos=0 hsize=15048
+      image id="image2" bytes=35292 hash=bbc11404 w=15086 h=3199
+        pos: char=1 v=0 h=0 wrap=0 vrel_para=1 hrel_para=0
+  table rows=1 cols=4 w=29019 h=2514 cells=4
+    repeat-header=1
+    pos: char=1 v=0 h=0 wrap=0 vrel_para=1 hrel_para=1
+    cell r=0 c=0 rs=1 cs=1 w=4821 h=2514 fill=0:000000 pad=141,141,141,141
+      borders l=0 r=0 t=0 b=0 colors=000000,000000,000000,000000 width=0
+      para align=1 indent l=0 r=0 first=-100 space before=0 after=0 line=160%
+        seg textpos=0 vpos=0 vsize=1000 th=1000 sp=600 hpos=0 hsize=4536
+        run "보도시점" font="돋움체" size=1000 color=000000 bold=1
+    cell r=0 c=1 rs=1 cs=1 w=11488 h=2514 fill=0:000000 pad=141,141,141,141
+      borders l=0 r=0 t=0 b=0 colors=000000,000000,000000,000000 width=0
+      para align=1 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+        seg textpos=0 vpos=0 vsize=1000 th=1000 sp=600 hpos=0 hsize=11204
+        run "배포 즉시" font="돋움체" size=1000 color=000000 bold=1
+    cell r=0 c=2 rs=1 cs=1 w=3817 h=2514 fill=0:000000 pad=141,141,141,141
+      borders l=0 r=0 t=0 b=0 colors=000000,000000,000000,000000 width=0
+      para align=1 indent l=0 r=0 first=-2321 space before=0 after=0 line=160%
+        seg textpos=0 vpos=0 vsize=1000 th=1000 sp=600 hpos=0 hsize=3532
+        run "배포" font="돋움체" size=1000 color=000000 bold=1
+    cell r=0 c=3 rs=1 cs=1 w=8893 h=2514 fill=0:000000 pad=141,141,141,141
+      borders l=0 r=0 t=0 b=0 colors=000000,000000,000000,000000 width=0
+      para align=1 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+        seg textpos=0 vpos=0 vsize=1000 th=1000 sp=600 hpos=0 hsize=8608
+        run "2026. 10. 22.(목)" font="돋움체" size=1000 color=000000 bold=1
+  table rows=2 cols=1 w=47816 h=12541 cells=2
+    repeat-header=1
+    pos: char=1 v=0 h=0 wrap=0 vrel_para=1 hrel_para=1
+    cell r=0 c=0 rs=1 cs=1 w=47816 h=8619 fill=0:000000 pad=141,141,141,141
+      borders l=1 r=1 t=1 b=0 colors=000000,000000,000000,000000 width=1
+      para align=1 indent l=0 r=0 first=0 space before=0 after=0 line=140%
+        seg textpos=0 vpos=0 vsize=2600 th=2600 sp=1040 hpos=0 hsize=47532
+        seg textpos=24 vpos=3640 vsize=2600 th=2600 sp=1040 hpos=0 hsize=47532
+        run "“시험 잘 보는 약은 없습니다”… 식약처, 프로프라놀롤 성분 안전 사용 안내" font="함초롬돋움" size=2600 color=000000 bold=1
+    cell r=1 c=0 rs=1 cs=1 w=47816 h=3922 fill=0:000000 pad=141,141,141,141
+      borders l=1 r=1 t=0 b=1 colors=000000,000000,000000,000000 width=1
+      para align=3 indent l=703 r=229 first=-2299 space before=0 after=0 line=160%
+        seg textpos=0 vpos=0 vsize=1400 th=1400 sp=840 hpos=703 hsize=46600
+        run " - 불안 등 증상 없이 ‘시험 대비용’으로 오남용되지 않도록 당부" font="함초롬바탕" size=1400 color=000000 bold=0
+  para align=3 indent l=0 r=0 first=0 space before=0 after=0 line=145%
+    seg textpos=0 vpos=19350 vsize=700 th=700 sp=316 hpos=0 hsize=48188
+    run "" font="바탕체" size=700 color=0000ff bold=0
+  para align=3 indent l=0 r=0 first=0 space before=0 after=0 line=170%
+    seg textpos=0 vpos=20366 vsize=1400 th=1400 sp=980 hpos=0 hsize=48188
+    seg textpos=39 vpos=22746 vsize=1400 th=1400 sp=980 hpos=0 hsize=48188
+    seg textpos=84 vpos=25126 vsize=1400 th=1400 sp=980 hpos=0 hsize=48188
+    seg textpos=124 vpos=27506 vsize=1400 th=1400 sp=980 hpos=0 hsize=48188
+    run " " font="바탕" size=1400 color=000000 bold=0
+    run "식품의약품안전처" font="바탕" size=1400 color=000000 bold=1
+    run "(처장 오유경)는 " font="바탕" size=1400 color=000000 bold=0
+    run "한국의약품안전관리원" font="바탕" size=1400 color=000000 bold=1
+    run "(원장 손수정)과 함께 " font="바탕" size=1400 color=000000 bold=0
+    run "2027학년" font="바탕" size=1400 color=000000 bold=1
+    run "도 " font="바탕" size=1400 color=000000 bold=0
+    run "대학수학능력시험" font="바탕" size=1400 color=000000 bold=1
+    run "(11.19.)" font="바탕" size=1200 color=000000 bold=1
+    run "을 앞두고, 일명 ‘떨림 방지약’" font="바탕" size=1400 color=000000 bold=0
+    run "으로 잘못 알려진 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=-1,-1,-1,-1,-1,-1,-1
+    run "프로프라놀롤 의약품" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=-1,-1,-1,-1,-1,-1,-1
+    run "의 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=-1,-1,-1,-1,-1,-1,-1
+    run "안전한 사용" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=-1,-1,-1,-1,-1,-1,-1
+    run "을 위해 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=-1,-1,-1,-1,-1,-1,-1
+    run "청소년" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=-1,-1,-1,-1,-1,-1,-1
+    run " 등을" font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=-1,-1,-1,-1,-1,-1,-1
+    run " " font="바탕" size=1400 color=000000 bold=0
+    run "대상" font="바탕" size=1400 color=000000 bold=1
+    run "으로 한 " font="바탕" size=1400 color=000000 bold=0
+    run "카드뉴스" font="바탕" size=1400 color=000000 bold=1
+    run "를" font="바탕" size=1400 color=000000 bold=0
+    run " 제작" font="바탕" size=1400 color=000000 bold=1
+    run "하여 " font="바탕" size=1400 color=000000 bold=0
+    run "10월 22일 배포" font="바탕" size=1400 color=000000 bold=1
+    run "했다고 밝혔다." font="바탕" size=1400 color=000000 bold=0
+  para align=3 indent l=0 r=0 first=0 space before=0 after=0 line=170%
+    seg textpos=0 vpos=29886 vsize=300 th=300 sp=212 hpos=0 hsize=48188
+    run "" font="바탕" size=300 color=000000 bold=0
+  para align=3 indent l=300 r=200 first=-3702 space before=0 after=0 line=170%
+    seg textpos=0 vpos=30398 vsize=1200 th=1200 sp=840 hpos=300 hsize=47688
+    seg textpos=53 vpos=32438 vsize=1200 th=1200 sp=840 hpos=300 hsize=47688
+    run "    * 프로프라놀롤(propranolol) 교감신경의 베타수용체를 차단하는 약물로, 부정맥·고혈압 등 심혈관계 질환 등에 사용되는 의사의 처방이 필요한 전문의약품" font="맑은 고딕" size=1200 color=000000 bold=0
+  para align=3 indent l=300 r=200 first=-3702 space before=0 after=0 line=170%
+    seg textpos=0 vpos=34478 vsize=700 th=700 sp=492 hpos=300 hsize=47688
+    run "" font="맑은 고딕" size=700 color=000000 bold=0
+  para align=3 indent l=0 r=0 first=0 space before=0 after=0 line=170%
+    seg textpos=0 vpos=35670 vsize=1400 th=1400 sp=980 hpos=0 hsize=48188
+    seg textpos=49 vpos=38050 vsize=1400 th=1400 sp=980 hpos=0 hsize=48188
+    seg textpos=93 vpos=40430 vsize=1400 th=1400 sp=980 hpos=0 hsize=48188
+    seg textpos=132 vpos=42810 vsize=1400 th=1400 sp=980 hpos=0 hsize=48188
+    seg textpos=169 vpos=45190 vsize=1400 th=1400 sp=980 hpos=0 hsize=48188
+    run " " font="바탕" size=1400 color=000000 bold=0
+    run "식약처는 앞서 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=-2,-2,-2,-2,-2,-2,-2
+    run "‘수능 대비 ADHD 치료제 집중점검" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=-2,-2,-2,-2,-2,-2,-2
+    run "(10.16.)" font="바탕" size=1200 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=-2,-2,-2,-2,-2,-2,-2
+    run " 실시’" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=-2,-2,-2,-2,-2,-2,-2
+    run " 및 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=-2,-2,-2,-2,-2,-2,-2
+    run "‘수험생" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=-2,-2,-2,-2,-2,-2,-2
+    run " " font="바탕" size=1400 color=000000 bold=1
+    run "카페인 함유 식품 섭취 주의 정보" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=3,3,3,3,3,3,3
+    run "(10.20.) " font="바탕" size=1200 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=3,3,3,3,3,3,3
+    run "안내’" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=3,3,3,3,3,3,3
+    run "에 이어, 이번에는 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=3,3,3,3,3,3,3
+    run "떨림·" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=3,3,3,3,3,3,3
+    run "불안" font="바탕" size=1400 color=000000 bold=1
+    run " 등 " font="바탕" size=1400 color=000000 bold=0
+    run "증상" font="바탕" size=1400 color=000000 bold=1
+    run "이 " font="바탕" size=1400 color=000000 bold=0
+    run "없는데도" font="바탕" size=1400 color=000000 bold=1
+    run " 단순히 " font="바탕" size=1400 color=000000 bold=0
+    run "시험" font="바탕" size=1400 color=000000 bold=1
+    run "을 " font="바탕" size=1400 color=000000 bold=0
+    run "잘 보기 위한 목적" font="바탕" size=1400 color=000000 bold=1
+    run "으로 " font="바탕" size=1400 color=000000 bold=0
+    run "프로프라" font="바탕" size=1400 color=000000 bold=1
+    run "놀롤 의약품" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=3,3,3,3,3,3,3
+    run "을 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=3,3,3,3,3,3,3
+    run "오남용" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=3,3,3,3,3,3,3
+    run "하지 않도록 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=3,3,3,3,3,3,3
+    run "수험생 등" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=3,3,3,3,3,3,3
+    run "에게 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=3,3,3,3,3,3,3
+    run "올바른 사용 정보" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=3,3,3,3,3,3,3
+    run "를" font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=3,3,3,3,3,3,3
+    run " 알리기 위해 " font="바탕" size=1400 color=000000 bold=0
+    run "마련" font="바탕" size=1400 color=000000 bold=1
+    run "되었다." font="바탕" size=1400 color=000000 bold=0
+  para align=3 indent l=0 r=0 first=0 space before=0 after=0 line=170%
+    seg textpos=0 vpos=47570 vsize=700 th=700 sp=492 hpos=0 hsize=48188
+    run "" font="바탕" size=700 color=000000 bold=0
+  para align=3 indent l=0 r=0 first=0 space before=0 after=0 line=170%
+    seg textpos=0 vpos=48762 vsize=1400 th=1400 sp=980 hpos=0 hsize=48188
+    seg textpos=37 vpos=51142 vsize=1400 th=1400 sp=980 hpos=0 hsize=48188
+    seg textpos=75 vpos=53522 vsize=1400 th=1400 sp=980 hpos=0 hsize=48188
+    seg textpos=117 vpos=55902 vsize=1400 th=1400 sp=980 hpos=0 hsize=48188
+    run " " font="바탕" size=1400 color=000000 bold=0
+    run "프로프라놀롤" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=2,2,2,2,2,2,2
+    run "은 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=2,2,2,2,2,2,2
+    run "교감신경" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=2,2,2,2,2,2,2
+    run "을 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=2,2,2,2,2,2,2
+    run "차단" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=2,2,2,2,2,2,2
+    run "하는 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=2,2,2,2,2,2,2
+    run "베타차단제 계열 약물" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=2,2,2,2,2,2,2
+    run "로 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=2,2,2,2,2,2,2
+    run "부정맥·" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=2,2,2,2,2,2,2
+    run "협심증·고혈압" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=5,5,5,5,5,5,5
+    run " 등 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=5,5,5,5,5,5,5
+    run "심혈관계 질환 치료" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=5,5,5,5,5,5,5
+    run " 등에 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=5,5,5,5,5,5,5
+    run "사용" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=5,5,5,5,5,5,5
+    run "되며, 반드시 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=5,5,5,5,5,5,5
+    run "의사" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=5,5,5,5,5,5,5
+    run "의" font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=5,5,5,5,5,5,5
+    run " " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=1,1,1,1,1,1,1
+    run "처방" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=1,1,1,1,1,1,1
+    run "이" font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=1,1,1,1,1,1,1
+    run " 필요한 " font="바탕" size=1400 color=000000 bold=0
+    run "전문의약품" font="바탕" size=1400 color=000000 bold=1
+    run "으로, 이 약을 복용할 경우 " font="바탕" size=1400 color=000000 bold=0
+    run "졸음·피로, 어지럼증, 기립성저혈압, 서맥" font="바탕" size=1400 color=000000 bold=1
+    run " 등이 나타날 수 있어 " font="바탕" size=1400 color=000000 bold=0
+    run "주의" font="바탕" size=1400 color=000000 bold=1
+    run "가 " font="바탕" size=1400 color=000000 bold=0
+    run "필요함" font="바탕" size=1400 color=000000 bold=1
+    run "을 " font="바탕" size=1400 color=000000 bold=0
+    run "안내" font="바탕" size=1400 color=000000 bold=1
+    run "하였다." font="바탕" size=1400 color=000000 bold=0
+  para align=3 indent l=0 r=0 first=0 space before=0 after=0 line=170%
+    seg textpos=0 vpos=58282 vsize=700 th=700 sp=492 hpos=0 hsize=48188
+    run "" font="바탕" size=700 color=000000 bold=0
+  para align=3 indent l=0 r=0 first=0 space before=0 after=0 line=170%
+    seg textpos=0 vpos=59474 vsize=1400 th=1400 sp=980 hpos=0 hsize=48188
+    seg textpos=41 vpos=61854 vsize=1400 th=1400 sp=980 hpos=0 hsize=48188
+    seg textpos=81 vpos=64234 vsize=1400 th=1400 sp=980 hpos=0 hsize=48188
+    seg textpos=120 vpos=66614 vsize=1400 th=1400 sp=980 hpos=0 hsize=48188
+    run " " font="바탕" size=1400 color=000000 bold=0
+    run "식약처는 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=1,1,1,1,1,1,1
+    run "“시험을 잘 보게 하는 약은 없다”" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=1,1,1,1,1,1,1
+    run "며, 반드시 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=1,1,1,1,1,1,1
+    run "의사" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=1,1,1,1,1,1,1
+    run "의 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=1,1,1,1,1,1,1
+    run "처방" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=1,1,1,1,1,1,1
+    run " 후" font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=1,1,1,1,1,1,1
+    run " " font="바탕" size=1400 color=000000 bold=0
+    run "약사" font="바탕" size=1400 color=000000 bold=1
+    run "의 " font="바탕" size=1400 color=000000 bold=0
+    run "조제·복약 지도" font="바탕" size=1400 color=000000 bold=1
+    run "에 따라 " font="바탕" size=1400 color=000000 bold=0
+    run "안전" font="바탕" size=1400 color=000000 bold=1
+    run "하게 " font="바탕" size=1400 color=000000 bold=0
+    run "사용" font="바탕" size=1400 color=000000 bold=1
+    run "해야 하며, 이번 " font="바탕" size=1400 color=000000 bold=0
+    run "카드뉴스" font="바탕" size=1400 color=000000 bold=1
+    run "가" font="바탕" size=1400 color=000000 bold=0
+    run " " font="바탕" size=1400 color=000000 bold=1
+    run "의약품 허가사항" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=-1,-1,-1,-1,-1,-1,-1
+    run "에 따른 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=-1,-1,-1,-1,-1,-1,-1
+    run "올바른 정보" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=-1,-1,-1,-1,-1,-1,-1
+    run "를 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=-1,-1,-1,-1,-1,-1,-1
+    run "제공" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=-1,-1,-1,-1,-1,-1,-1
+    run "하여 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=-1,-1,-1,-1,-1,-1,-1
+    run "청소년" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=-1,-1,-1,-1,-1,-1,-1
+    run "들이 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=-1,-1,-1,-1,-1,-1,-1
+    run "프로프라놀롤" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=-1,-1,-1,-1,-1,-1,-1
+    run " 성분 의약품" font="바탕" size=1400 color=000000 bold=1
+    run "을 " font="바탕" size=1400 color=000000 bold=0
+    run "안전하게" font="바탕" size=1400 color=000000 bold=1
+    run " " font="바탕" size=1400 color=000000 bold=0
+    run "투약" font="바탕" size=1400 color=000000 bold=1
+    run "하는데 " font="바탕" size=1400 color=000000 bold=0
+    run "도움" font="바탕" size=1400 color=000000 bold=1
+    run "이 되기를 " font="바탕" size=1400 color=000000 bold=0
+    run "기대" font="바탕" size=1400 color=000000 bold=1
+    run "한다고 밝혔다." font="바탕" size=1400 color=000000 bold=0
+  para align=3 indent l=0 r=0 first=0 space before=0 after=0 line=170%
+    seg textpos=0 vpos=68994 vsize=700 th=700 sp=492 hpos=0 hsize=48188
+    run "" font="바탕" size=700 color=000000 bold=0
+  breaks page=0 column=0 saved=1
+  para align=3 indent l=0 r=0 first=0 space before=0 after=0 line=170%
+    seg textpos=0 vpos=0 vsize=1400 th=1400 sp=980 hpos=0 hsize=48188
+    seg textpos=43 vpos=2380 vsize=1400 th=1400 sp=980 hpos=0 hsize=48188
+    seg textpos=82 vpos=4760 vsize=1400 th=1400 sp=980 hpos=0 hsize=48188
+    run " 아울러 식약처는 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=-5,-5,-5,-5,-5,-5,-5
+    run "의약품안전사용서비스" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=-5,-5,-5,-5,-5,-5,-5
+    run "(DUR)" font="바탕" size=1200 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=-5,-5,-5,-5,-5,-5,-5
+    run "*" font="바탕" size=1200 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=-5,-5,-5,-5,-5,-5,-5
+    run " 시스템의" font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=-5,-5,-5,-5,-5,-5,-5
+    run " " font="바탕" size=1400 color=000000 bold=0
+    run "알림" font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=3,3,3,3,3,3,3
+    run "(팝업)" font="바탕" size=1200 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=3,3,3,3,3,3,3
+    run " 및 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=3,3,3,3,3,3,3
+    run "대한의사협회·대한약사회" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=3,3,3,3,3,3,3
+    run " 등을 통해 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=3,3,3,3,3,3,3
+    run "의료기관" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=3,3,3,3,3,3,3
+    run " 및 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=3,3,3,3,3,3,3
+    run "약국" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=3,3,3,3,3,3,3
+    run "을" font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=3,3,3,3,3,3,3
+    run " " font="바탕" size=1400 color=000000 bold=0
+    run "대상" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=2,2,2,2,2,2,2
+    run "으로 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=2,2,2,2,2,2,2
+    run "처방·복약 상담 시" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=2,2,2,2,2,2,2
+    run " " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=2,2,2,2,2,2,2
+    run "환자 상태" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=2,2,2,2,2,2,2
+    run " 및 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=2,2,2,2,2,2,2
+    run "복용 목적" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=2,2,2,2,2,2,2
+    run " 등을 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=2,2,2,2,2,2,2
+    run "확인" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=2,2,2,2,2,2,2
+    run "하도록" font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=2,2,2,2,2,2,2
+    run " " font="바탕" size=1400 color=000000 bold=0
+    run "주의" font="바탕" size=1400 color=000000 bold=1
+    run "를 " font="바탕" size=1400 color=000000 bold=0
+    run "당부" font="바탕" size=1400 color=000000 bold=1
+    run "하였다. " font="바탕" size=1400 color=000000 bold=0
+  para align=3 indent l=0 r=0 first=0 space before=0 after=0 line=170%
+    seg textpos=0 vpos=7140 vsize=300 th=300 sp=212 hpos=0 hsize=48188
+    run "" font="바탕" size=300 color=000000 bold=0
+  para align=3 indent l=300 r=200 first=-3503 space before=0 after=0 line=170%
+    seg textpos=0 vpos=7652 vsize=1200 th=1200 sp=840 hpos=300 hsize=47688
+    seg textpos=64 vpos=9692 vsize=1200 th=1200 sp=840 hpos=300 hsize=47688
+    seg textpos=105 vpos=11732 vsize=1200 th=1200 sp=840 hpos=300 hsize=47688
+    run " " font="맑은 고딕" size=1200 color=0000ff bold=0
+    run "   " font="맑은 고딕" size=1200 color=000000 bold=0
+    run "* 의약품안전사용서비스(DUR, Drug Utilization Review): 의약품 처방·조제 시 환자가" font="맑은 고딕" size=1200 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=-3,-3,-3,-3,-3,-3,-3
+    run " 현재 복용하고 있는 약과 병용금기 등 의약품 안전정보를 요양기관에 실시간 제공하여 부작용을 일으킬 수 있는 의약품 사용을 사전 점검하는 시스템" font="맑은 고딕" size=1200 color=000000 bold=0
+  para align=3 indent l=0 r=0 first=0 space before=0 after=0 line=170%
+    seg textpos=0 vpos=13772 vsize=700 th=700 sp=492 hpos=0 hsize=48188
+    run "" font="바탕" size=700 color=000000 bold=0
+  para align=3 indent l=0 r=0 first=0 space before=0 after=0 line=170%
+    seg textpos=0 vpos=14964 vsize=1400 th=1400 sp=980 hpos=0 hsize=48188
+    seg textpos=49 vpos=17344 vsize=1400 th=1400 sp=980 hpos=0 hsize=48188
+    seg textpos=99 vpos=19724 vsize=1400 th=1400 sp=980 hpos=0 hsize=48188
+    run " " font="바탕" size=1400 color=000000 bold=0
+    run "해당 자료는 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=-2,-2,-2,-2,-2,-2,-2
+    run "‘식약처 누리집" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=-2,-2,-2,-2,-2,-2,-2
+    run "(www.mfds.go.kr)" font="바탕" size=1200 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=-2,-2,-2,-2,-2,-2,-2
+    run " " font="바탕" size=1200 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=-2,-2,-2,-2,-2,-2,-2
+    run "→ 법령/자료 → 홍보물자료 → 일반홍보물’ " font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=-2,-2,-2,-2,-2,-2,-2
+    run "또는 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=-2,-2,-2,-2,-2,-2,-2
+    run "‘한국의약품안전관리원 누리집" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=-2,-2,-2,-2,-2,-2,-2
+    run "(www.drugsafe.or.kr)" font="바탕" size=1200 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=-2,-2,-2,-2,-2,-2,-2
+    run " " font="바탕" size=1200 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=-2,-2,-2,-2,-2,-2,-2
+    run "→ 교육·홍보 → 카드뉴스’" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=-2,-2,-2,-2,-2,-2,-2
+    run "에서 확인할 수 있다. " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=-2,-2,-2,-2,-2,-2,-2
+  para align=3 indent l=0 r=0 first=0 space before=0 after=0 line=170%
+    seg textpos=0 vpos=22104 vsize=700 th=700 sp=492 hpos=0 hsize=48188
+    run "" font="바탕" size=700 color=000000 bold=0
+  para align=3 indent l=0 r=0 first=-3924 space before=0 after=0 line=170%
+    seg textpos=0 vpos=23296 vsize=1400 th=1400 sp=980 hpos=0 hsize=48188
+    run "<붙임> 카드뉴스" font="바탕" size=1400 color=000000 bold=0
+  para align=3 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+    seg textpos=0 vpos=25676 vsize=700 th=700 sp=420 hpos=0 hsize=48188
+    run "" font="바탕체" size=700 color=000000 bold=0
+  table rows=4 cols=6 w=47697 h=6260 cells=24
+    repeat-header=1
+    pos: char=0 v=0 h=0 wrap=0 vrel_para=1 hrel_para=1
+    cell r=0 c=0 rs=1 cs=1 w=6236 h=1565 fill=0:000000 pad=141,141,141,141
+      borders l=1 r=1 t=1 b=0 colors=000000,000000,000000,000000 width=1
+      para align=1 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+        seg textpos=0 vpos=0 vsize=1000 th=1000 sp=600 hpos=0 hsize=5952
+        run "담당 부서" font="돋움체" size=1000 color=000000 bold=0
+    cell r=0 c=1 rs=1 cs=1 w=15167 h=1565 fill=0:000000 pad=141,141,141,141
+      borders l=1 r=1 t=1 b=0 colors=000000,000000,000000,000000 width=1
+      para align=1 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+        seg textpos=0 vpos=0 vsize=1000 th=1000 sp=600 hpos=0 hsize=14884
+        run "식품의약품안전처" font="돋움체" size=1000 color=000000 bold=0
+    cell r=0 c=2 rs=1 cs=1 w=6081 h=1565 fill=0:000000 pad=141,141,141,141
+      borders l=1 r=1 t=1 b=1 colors=000000,000000,000000,000000 width=1
+      para align=1 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+        seg textpos=0 vpos=0 vsize=1000 th=1000 sp=600 hpos=0 hsize=5796
+        run "책임자" font="돋움체" size=1000 color=000000 bold=0
+    cell r=0 c=3 rs=1 cs=1 w=6171 h=1565 fill=0:000000 pad=141,141,141,141
+      borders l=1 r=0 t=1 b=1 colors=000000,000000,000000,000000 width=1
+      para align=2 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+        seg textpos=0 vpos=0 vsize=1000 th=1000 sp=600 hpos=0 hsize=5888
+        run "과  장" font="돋움체" size=1000 color=000000 bold=0
+    cell r=0 c=4 rs=1 cs=1 w=5039 h=1565 fill=0:000000 pad=141,141,141,141
+      borders l=0 r=0 t=1 b=1 colors=000000,000000,000000,000000 width=1
+      para align=2 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+        seg textpos=0 vpos=0 vsize=1000 th=1000 sp=600 hpos=0 hsize=4756
+        run "강영아" font="돋움체" size=1000 color=000000 bold=0
+    cell r=0 c=5 rs=1 cs=1 w=9003 h=1565 fill=0:000000 pad=141,141,141,141
+      borders l=0 r=1 t=1 b=1 colors=000000,000000,000000,000000 width=1
+      para align=0 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+        seg textpos=0 vpos=0 vsize=1000 th=1000 sp=600 hpos=0 hsize=8720
+        run "(043-719-2701)" font="돋움체" size=1000 color=000000 bold=0
+    cell r=1 c=0 rs=1 cs=1 w=6236 h=1565 fill=0:000000 pad=141,141,141,141
+      borders l=1 r=1 t=0 b=1 colors=000000,000000,000000,000000 width=1
+      para align=1 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+        seg textpos=0 vpos=0 vsize=1000 th=1000 sp=600 hpos=0 hsize=5952
+    cell r=1 c=1 rs=1 cs=1 w=15167 h=1565 fill=0:000000 pad=141,141,141,141
+      borders l=1 r=1 t=0 b=1 colors=000000,000000,000000,000000 width=1
+      para align=1 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+        seg textpos=0 vpos=0 vsize=1000 th=1000 sp=600 hpos=0 hsize=14884
+        run "의약품안전평가과" font="돋움체" size=1000 color=000000 bold=0
+    cell r=1 c=2 rs=1 cs=1 w=6081 h=1565 fill=0:000000 pad=141,141,141,141
+      borders l=1 r=1 t=1 b=1 colors=000000,000000,000000,000000 width=1
+      para align=1 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+        seg textpos=0 vpos=0 vsize=1000 th=1000 sp=600 hpos=0 hsize=5796
+        run "담당자" font="돋움체" size=1000 color=000000 bold=0
+    cell r=1 c=3 rs=1 cs=1 w=6171 h=1565 fill=0:000000 pad=141,141,141,141
+      borders l=1 r=0 t=1 b=1 colors=000000,000000,000000,000000 width=1
+      para align=2 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+        seg textpos=0 vpos=0 vsize=1000 th=1000 sp=600 hpos=0 hsize=5888
+        run "연구관" font="돋움체" size=1000 color=000000 bold=0
+    cell r=1 c=4 rs=1 cs=1 w=5039 h=1565 fill=0:000000 pad=141,141,141,141
+      borders l=0 r=0 t=1 b=1 colors=000000,000000,000000,000000 width=1
+      para align=2 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+        seg textpos=0 vpos=0 vsize=1000 th=1000 sp=600 hpos=0 hsize=4756
+        run "하윤정" font="돋움체" size=1000 color=000000 bold=0
+    cell r=1 c=5 rs=1 cs=1 w=9003 h=1565 fill=0:000000 pad=141,141,141,141
+      borders l=0 r=1 t=1 b=1 colors=000000,000000,000000,000000 width=1
+      para align=0 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+        seg textpos=0 vpos=0 vsize=1000 th=1000 sp=600 hpos=0 hsize=8720
+        run "(043-719-2722)" font="돋움체" size=1000 color=000000 bold=0
+    cell r=2 c=0 rs=1 cs=1 w=6236 h=1565 fill=0:000000 pad=141,141,141,141
+      borders l=1 r=1 t=1 b=0 colors=000000,000000,000000,000000 width=1
+      para align=1 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+        seg textpos=0 vpos=0 vsize=1000 th=1000 sp=600 hpos=0 hsize=5952
+        run "담당 부서" font="돋움체" size=1000 color=000000 bold=0
+    cell r=2 c=1 rs=1 cs=1 w=15167 h=1565 fill=0:000000 pad=141,141,141,141
+      borders l=1 r=1 t=1 b=0 colors=000000,000000,000000,000000 width=1
+      para align=1 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+        seg textpos=0 vpos=0 vsize=1000 th=1000 sp=600 hpos=0 hsize=14884
+        run "한국의약품안전관리원" font="돋움체" size=1000 color=000000 bold=0
+    cell r=2 c=2 rs=1 cs=1 w=6081 h=1565 fill=0:000000 pad=141,141,141,141
+      borders l=1 r=1 t=1 b=1 colors=000000,000000,000000,000000 width=1
+      para align=1 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+        seg textpos=0 vpos=0 vsize=1000 th=1000 sp=600 hpos=0 hsize=5796
+        run "책임자" font="돋움체" size=1000 color=000000 bold=0
+    cell r=2 c=3 rs=1 cs=1 w=6171 h=1565 fill=0:000000 pad=141,141,141,141
+      borders l=1 r=0 t=1 b=1 colors=000000,000000,000000,000000 width=1
+      para align=2 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+        seg textpos=0 vpos=0 vsize=1000 th=1000 sp=600 hpos=0 hsize=5888
+        run "본부장 " font="돋움체" size=1000 color=000000 bold=0
+    cell r=2 c=4 rs=1 cs=1 w=5039 h=1565 fill=0:000000 pad=141,141,141,141
+      borders l=0 r=0 t=1 b=1 colors=000000,000000,000000,000000 width=1
+      para align=2 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+        seg textpos=0 vpos=0 vsize=1000 th=1000 sp=600 hpos=0 hsize=4756
+        run "정현주" font="돋움체" size=1000 color=000000 bold=0
+    cell r=2 c=5 rs=1 cs=1 w=9003 h=1565 fill=0:000000 pad=141,141,141,141
+      borders l=0 r=1 t=1 b=1 colors=000000,000000,000000,000000 width=1
+      para align=0 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+        seg textpos=0 vpos=0 vsize=1000 th=1000 sp=600 hpos=0 hsize=8720
+        run "(02-2172-6805)" font="돋움체" size=1000 color=000000 bold=0
+    cell r=3 c=0 rs=1 cs=1 w=6236 h=1565 fill=0:000000 pad=141,141,141,141
+      borders l=1 r=1 t=0 b=1 colors=000000,000000,000000,000000 width=1
+      para align=1 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+        seg textpos=0 vpos=0 vsize=1000 th=1000 sp=600 hpos=0 hsize=5952
+        run "<협조>" font="돋움체" size=1000 color=000000 bold=0
+    cell r=3 c=1 rs=1 cs=1 w=15167 h=1565 fill=0:000000 pad=141,141,141,141
+      borders l=1 r=1 t=0 b=1 colors=000000,000000,000000,000000 width=1
+      para align=1 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+        seg textpos=0 vpos=0 vsize=1000 th=1000 sp=600 hpos=0 hsize=14884
+        run "DUR 정보 관리팀" font="돋움체" size=1000 color=000000 bold=0
+    cell r=3 c=2 rs=1 cs=1 w=6081 h=1565 fill=0:000000 pad=141,141,141,141
+      borders l=1 r=1 t=1 b=1 colors=000000,000000,000000,000000 width=1
+      para align=1 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+        seg textpos=0 vpos=0 vsize=1000 th=1000 sp=600 hpos=0 hsize=5796
+        run "담당자" font="돋움체" size=1000 color=000000 bold=0
+    cell r=3 c=3 rs=1 cs=1 w=6171 h=1565 fill=0:000000 pad=141,141,141,141
+      borders l=1 r=0 t=1 b=1 colors=000000,000000,000000,000000 width=1
+      para align=2 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+        seg textpos=0 vpos=0 vsize=1000 th=1000 sp=600 hpos=0 hsize=5888
+        run "팀  장 " font="돋움체" size=1000 color=000000 bold=0
+    cell r=3 c=4 rs=1 cs=1 w=5039 h=1565 fill=0:000000 pad=141,141,141,141
+      borders l=0 r=0 t=1 b=1 colors=000000,000000,000000,000000 width=1
+      para align=2 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+        seg textpos=0 vpos=0 vsize=1000 th=1000 sp=600 hpos=0 hsize=4756
+        run "심선미" font="돋움체" size=1000 color=000000 bold=0
+    cell r=3 c=5 rs=1 cs=1 w=9003 h=1565 fill=0:000000 pad=141,141,141,141
+      borders l=0 r=1 t=1 b=1 colors=000000,000000,000000,000000 width=1
+      para align=0 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+        seg textpos=0 vpos=0 vsize=1000 th=1000 sp=600 hpos=0 hsize=8720
+        run "(02-2172-6764)" font="돋움체" size=1000 color=000000 bold=0
+  table rows=1 cols=3 w=47622 h=3452 cells=3
+    repeat-header=1
+    pos: char=0 v=0 h=0 wrap=0 vrel_para=1 hrel_para=1
+    cell r=0 c=0 rs=1 cs=1 w=14459 h=282 fill=0:000000 pad=510,510,141,141
+      borders l=0 r=0 t=0 b=0 colors=000000,000000,000000,000000 width=0
+      para align=1 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+        object-anchor-only=1
+        seg textpos=0 vpos=0 vsize=3170 th=3170 sp=600 hpos=0 hsize=13436
+      image id="image3" bytes=81654 hash=e8caf3ef w=13471 h=3170
+        pos: char=1 v=0 h=0 wrap=0 vrel_para=1 hrel_para=1
+    cell r=0 c=1 rs=1 cs=1 w=16723 h=282 fill=0:000000 pad=510,510,141,141
+      borders l=0 r=0 t=0 b=0 colors=000000,000000,000000,000000 width=0
+      para align=1 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+        object-anchor-only=1
+        seg textpos=0 vpos=0 vsize=3130 th=3130 sp=600 hpos=0 hsize=15700
+      image id="image4" bytes=42525 hash=3a5a4ea8 w=14938 h=3130
+        pos: char=1 v=0 h=0 wrap=0 vrel_para=1 hrel_para=0
+    cell r=0 c=2 rs=1 cs=1 w=16440 h=282 fill=0:000000 pad=510,510,141,141
+      borders l=0 r=0 t=0 b=0 colors=000000,000000,000000,000000 width=0
+      para align=3 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+        object-anchor-only=1
+        seg textpos=0 vpos=0 vsize=3163 th=3163 sp=600 hpos=0 hsize=15420
+      container w=15810 h=3163 images=2
+        pos: char=1 v=-1082 h=23952 wrap=0 vrel_para=1 hrel_para=0
+        image id="image5" bytes=26127 hash=f4f01c92 w=9480 h=3300
+          pos: char=1 v=0 h=0 wrap=0 vrel_para=1 hrel_para=1
+        image id="image6" bytes=80421 hash=34d4dd34 w=6082 h=2457
+          pos: char=1 v=0 h=0 wrap=0 vrel_para=1 hrel_para=1
+  breaks page=1 column=0 saved=1
+  table rows=1 cols=3 w=47686 h=2914 cells=3
+    repeat-header=1
+    pos: char=1 v=0 h=0 wrap=0 vrel_para=1 hrel_para=1
+    cell r=0 c=0 rs=1 cs=1 w=4458 h=2914 fill=1:193657 pad=141,141,141,141
+      borders l=1 r=1 t=1 b=1 colors=000000,000000,000000,000000 width=2
+      para align=1 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+        seg textpos=0 vpos=0 vsize=1500 th=1500 sp=900 hpos=0 hsize=4176
+        run "붙임" font="HY헤드라인M" size=1500 color=ffffff bold=0
+    cell r=0 c=1 rs=1 cs=1 w=565 h=2914 fill=0:000000 pad=141,141,141,141
+      borders l=1 r=1 t=0 b=0 colors=000000,000000,000000,000000 width=1
+      para align=3 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+        seg textpos=0 vpos=0 vsize=1600 th=1600 sp=960 hpos=0 hsize=1440
+    cell r=0 c=2 rs=1 cs=1 w=42663 h=2914 fill=0:000000 pad=141,141,141,141
+      borders l=1 r=1 t=1 b=1 colors=000000,000000,000000,000000 width=2
+      para align=3 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+        seg textpos=0 vpos=0 vsize=1600 th=1600 sp=960 hpos=0 hsize=42380
+        run " " font="HY헤드라인M" size=1600 color=000000 bold=0
+          metrics width=100,100,100,100,100,100,100 spacing=-8,-8,-8,-8,-8,-8,-8
+        run "카드뉴스" font="HY헤드라인M" size=1600 color=000000 bold=0
+  table rows=4 cols=2 w=47624 h=64091 cells=8
+    repeat-header=1
+    pos: char=0 v=0 h=0 wrap=0 vrel_para=1 hrel_para=1
+    cell r=0 c=0 rs=1 cs=1 w=23812 h=32129 fill=0:000000 pad=510,510,141,141
+      borders l=1 r=1 t=1 b=1 colors=000000,000000,000000,000000 width=1
+      para align=3 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+        object-anchor-only=1
+        seg textpos=0 vpos=0 vsize=1000 th=1000 sp=600 hpos=0 hsize=0
+      image id="image7" bytes=738846 hash=ee6017f2 w=22792 h=28863
+        pos: char=0 v=0 h=0 wrap=0 vrel_para=1 hrel_para=0
+    cell r=0 c=1 rs=1 cs=1 w=23812 h=32129 fill=0:000000 pad=510,510,141,141
+      borders l=1 r=1 t=1 b=1 colors=000000,000000,000000,000000 width=1
+      para align=3 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+        object-anchor-only=1
+        seg textpos=0 vpos=0 vsize=1000 th=1000 sp=600 hpos=0 hsize=0
+      image id="image8" bytes=730014 hash=12a926c8 w=22792 h=28633
+        pos: char=0 v=0 h=0 wrap=0 vrel_para=1 hrel_para=0
+    cell r=1 c=0 rs=1 cs=1 w=23812 h=31962 fill=0:000000 pad=510,510,141,141
+      borders l=1 r=1 t=1 b=1 colors=000000,000000,000000,000000 width=1
+      para align=3 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+        object-anchor-only=1
+        seg textpos=0 vpos=0 vsize=1000 th=1000 sp=600 hpos=0 hsize=0
+      image id="image9" bytes=732654 hash=8ba634e7 w=22792 h=28313
+        pos: char=0 v=0 h=0 wrap=0 vrel_para=1 hrel_para=0
+    cell r=1 c=1 rs=1 cs=1 w=23812 h=31962 fill=0:000000 pad=510,510,141,141
+      borders l=1 r=1 t=1 b=1 colors=000000,000000,000000,000000 width=1
+      para align=3 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+        object-anchor-only=1
+        seg textpos=0 vpos=0 vsize=1000 th=1000 sp=600 hpos=0 hsize=0
+      image id="image10" bytes=722966 hash=28478b29 w=22792 h=28768
+        pos: char=0 v=0 h=0 wrap=0 vrel_para=1 hrel_para=0
+    cell r=2 c=0 rs=1 cs=1 w=23812 h=31588 fill=0:000000 pad=510,510,141,141
+      borders l=1 r=1 t=1 b=1 colors=000000,000000,000000,000000 width=1
+      para align=3 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+        object-anchor-only=1
+        seg textpos=0 vpos=0 vsize=1000 th=1000 sp=600 hpos=0 hsize=0
+      image id="image11" bytes=736614 hash=1bebda7d w=22792 h=28923
+        pos: char=0 v=0 h=0 wrap=0 vrel_para=1 hrel_para=0
+    cell r=2 c=1 rs=1 cs=1 w=23812 h=31588 fill=0:000000 pad=510,510,141,141
+      borders l=1 r=1 t=1 b=1 colors=000000,000000,000000,000000 width=1
+      para align=3 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+        object-anchor-only=1
+        seg textpos=0 vpos=0 vsize=1000 th=1000 sp=600 hpos=0 hsize=0
+      image id="image12" bytes=727802 hash=103ffa64 w=22792 h=28732
+        pos: char=0 v=0 h=0 wrap=0 vrel_para=1 hrel_para=0
+    cell r=3 c=0 rs=1 cs=1 w=23812 h=30387 fill=0:000000 pad=510,510,141,141
+      borders l=1 r=1 t=1 b=1 colors=000000,000000,000000,000000 width=1
+      para align=3 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+        object-anchor-only=1
+        seg textpos=0 vpos=0 vsize=1000 th=1000 sp=600 hpos=0 hsize=0
+      image id="image13" bytes=738422 hash=21dab3cb w=22792 h=28640
+        pos: char=0 v=0 h=0 wrap=0 vrel_para=1 hrel_para=0
+    cell r=3 c=1 rs=1 cs=1 w=23812 h=30387 fill=0:000000 pad=510,510,141,141
+      borders l=1 r=1 t=1 b=1 colors=000000,000000,000000,000000 width=1
+      para align=3 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+        object-anchor-only=1
+        seg textpos=0 vpos=0 vsize=1000 th=1000 sp=600 hpos=0 hsize=0
+      image id="image14" bytes=731334 hash=d218fbca w=22792 h=28715
+        pos: char=0 v=0 h=0 wrap=0 vrel_para=1 hrel_para=0
+  para align=3 indent l=0 r=0 first=0 space before=0 after=0 line=160%
+    seg textpos=0 vpos=62541 vsize=1400 th=1400 sp=840 hpos=0 hsize=48188
+    run "" font="바탕체" size=1400 color=000000 bold=0
+  -- flat paragraphs --
+  para align=3 indent l=0 r=0 first=0 space before=0 after=0 line=170%
+    seg textpos=0 vpos=20366 vsize=1400 th=1400 sp=980 hpos=0 hsize=48188
+    seg textpos=39 vpos=22746 vsize=1400 th=1400 sp=980 hpos=0 hsize=48188
+    seg textpos=84 vpos=25126 vsize=1400 th=1400 sp=980 hpos=0 hsize=48188
+    seg textpos=124 vpos=27506 vsize=1400 th=1400 sp=980 hpos=0 hsize=48188
+    run " " font="바탕" size=1400 color=000000 bold=0
+    run "식품의약품안전처" font="바탕" size=1400 color=000000 bold=1
+    run "(처장 오유경)는 " font="바탕" size=1400 color=000000 bold=0
+    run "한국의약품안전관리원" font="바탕" size=1400 color=000000 bold=1
+    run "(원장 손수정)과 함께 " font="바탕" size=1400 color=000000 bold=0
+    run "2027학년" font="바탕" size=1400 color=000000 bold=1
+    run "도 " font="바탕" size=1400 color=000000 bold=0
+    run "대학수학능력시험" font="바탕" size=1400 color=000000 bold=1
+    run "(11.19.)" font="바탕" size=1200 color=000000 bold=1
+    run "을 앞두고, 일명 ‘떨림 방지약’" font="바탕" size=1400 color=000000 bold=0
+    run "으로 잘못 알려진 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=-1,-1,-1,-1,-1,-1,-1
+    run "프로프라놀롤 의약품" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=-1,-1,-1,-1,-1,-1,-1
+    run "의 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=-1,-1,-1,-1,-1,-1,-1
+    run "안전한 사용" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=-1,-1,-1,-1,-1,-1,-1
+    run "을 위해 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=-1,-1,-1,-1,-1,-1,-1
+    run "청소년" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=-1,-1,-1,-1,-1,-1,-1
+    run " 등을" font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=-1,-1,-1,-1,-1,-1,-1
+    run " " font="바탕" size=1400 color=000000 bold=0
+    run "대상" font="바탕" size=1400 color=000000 bold=1
+    run "으로 한 " font="바탕" size=1400 color=000000 bold=0
+    run "카드뉴스" font="바탕" size=1400 color=000000 bold=1
+    run "를" font="바탕" size=1400 color=000000 bold=0
+    run " 제작" font="바탕" size=1400 color=000000 bold=1
+    run "하여 " font="바탕" size=1400 color=000000 bold=0
+    run "10월 22일 배포" font="바탕" size=1400 color=000000 bold=1
+    run "했다고 밝혔다." font="바탕" size=1400 color=000000 bold=0
+  para align=3 indent l=300 r=200 first=-3702 space before=0 after=0 line=170%
+    seg textpos=0 vpos=30398 vsize=1200 th=1200 sp=840 hpos=300 hsize=47688
+    seg textpos=53 vpos=32438 vsize=1200 th=1200 sp=840 hpos=300 hsize=47688
+    run "    * 프로프라놀롤(propranolol) 교감신경의 베타수용체를 차단하는 약물로, 부정맥·고혈압 등 심혈관계 질환 등에 사용되는 의사의 처방이 필요한 전문의약품" font="맑은 고딕" size=1200 color=000000 bold=0
+  para align=3 indent l=0 r=0 first=0 space before=0 after=0 line=170%
+    seg textpos=0 vpos=35670 vsize=1400 th=1400 sp=980 hpos=0 hsize=48188
+    seg textpos=49 vpos=38050 vsize=1400 th=1400 sp=980 hpos=0 hsize=48188
+    seg textpos=93 vpos=40430 vsize=1400 th=1400 sp=980 hpos=0 hsize=48188
+    seg textpos=132 vpos=42810 vsize=1400 th=1400 sp=980 hpos=0 hsize=48188
+    seg textpos=169 vpos=45190 vsize=1400 th=1400 sp=980 hpos=0 hsize=48188
+    run " " font="바탕" size=1400 color=000000 bold=0
+    run "식약처는 앞서 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=-2,-2,-2,-2,-2,-2,-2
+    run "‘수능 대비 ADHD 치료제 집중점검" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=-2,-2,-2,-2,-2,-2,-2
+    run "(10.16.)" font="바탕" size=1200 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=-2,-2,-2,-2,-2,-2,-2
+    run " 실시’" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=-2,-2,-2,-2,-2,-2,-2
+    run " 및 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=-2,-2,-2,-2,-2,-2,-2
+    run "‘수험생" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=-2,-2,-2,-2,-2,-2,-2
+    run " " font="바탕" size=1400 color=000000 bold=1
+    run "카페인 함유 식품 섭취 주의 정보" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=3,3,3,3,3,3,3
+    run "(10.20.) " font="바탕" size=1200 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=3,3,3,3,3,3,3
+    run "안내’" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=3,3,3,3,3,3,3
+    run "에 이어, 이번에는 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=3,3,3,3,3,3,3
+    run "떨림·" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=3,3,3,3,3,3,3
+    run "불안" font="바탕" size=1400 color=000000 bold=1
+    run " 등 " font="바탕" size=1400 color=000000 bold=0
+    run "증상" font="바탕" size=1400 color=000000 bold=1
+    run "이 " font="바탕" size=1400 color=000000 bold=0
+    run "없는데도" font="바탕" size=1400 color=000000 bold=1
+    run " 단순히 " font="바탕" size=1400 color=000000 bold=0
+    run "시험" font="바탕" size=1400 color=000000 bold=1
+    run "을 " font="바탕" size=1400 color=000000 bold=0
+    run "잘 보기 위한 목적" font="바탕" size=1400 color=000000 bold=1
+    run "으로 " font="바탕" size=1400 color=000000 bold=0
+    run "프로프라" font="바탕" size=1400 color=000000 bold=1
+    run "놀롤 의약품" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=3,3,3,3,3,3,3
+    run "을 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=3,3,3,3,3,3,3
+    run "오남용" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=3,3,3,3,3,3,3
+    run "하지 않도록 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=3,3,3,3,3,3,3
+    run "수험생 등" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=3,3,3,3,3,3,3
+    run "에게 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=3,3,3,3,3,3,3
+    run "올바른 사용 정보" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=3,3,3,3,3,3,3
+    run "를" font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=3,3,3,3,3,3,3
+    run " 알리기 위해 " font="바탕" size=1400 color=000000 bold=0
+    run "마련" font="바탕" size=1400 color=000000 bold=1
+    run "되었다." font="바탕" size=1400 color=000000 bold=0
+  para align=3 indent l=0 r=0 first=0 space before=0 after=0 line=170%
+    seg textpos=0 vpos=48762 vsize=1400 th=1400 sp=980 hpos=0 hsize=48188
+    seg textpos=37 vpos=51142 vsize=1400 th=1400 sp=980 hpos=0 hsize=48188
+    seg textpos=75 vpos=53522 vsize=1400 th=1400 sp=980 hpos=0 hsize=48188
+    seg textpos=117 vpos=55902 vsize=1400 th=1400 sp=980 hpos=0 hsize=48188
+    run " " font="바탕" size=1400 color=000000 bold=0
+    run "프로프라놀롤" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=2,2,2,2,2,2,2
+    run "은 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=2,2,2,2,2,2,2
+    run "교감신경" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=2,2,2,2,2,2,2
+    run "을 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=2,2,2,2,2,2,2
+    run "차단" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=2,2,2,2,2,2,2
+    run "하는 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=2,2,2,2,2,2,2
+    run "베타차단제 계열 약물" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=2,2,2,2,2,2,2
+    run "로 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=2,2,2,2,2,2,2
+    run "부정맥·" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=2,2,2,2,2,2,2
+    run "협심증·고혈압" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=5,5,5,5,5,5,5
+    run " 등 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=5,5,5,5,5,5,5
+    run "심혈관계 질환 치료" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=5,5,5,5,5,5,5
+    run " 등에 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=5,5,5,5,5,5,5
+    run "사용" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=5,5,5,5,5,5,5
+    run "되며, 반드시 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=5,5,5,5,5,5,5
+    run "의사" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=5,5,5,5,5,5,5
+    run "의" font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=5,5,5,5,5,5,5
+    run " " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=1,1,1,1,1,1,1
+    run "처방" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=1,1,1,1,1,1,1
+    run "이" font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=1,1,1,1,1,1,1
+    run " 필요한 " font="바탕" size=1400 color=000000 bold=0
+    run "전문의약품" font="바탕" size=1400 color=000000 bold=1
+    run "으로, 이 약을 복용할 경우 " font="바탕" size=1400 color=000000 bold=0
+    run "졸음·피로, 어지럼증, 기립성저혈압, 서맥" font="바탕" size=1400 color=000000 bold=1
+    run " 등이 나타날 수 있어 " font="바탕" size=1400 color=000000 bold=0
+    run "주의" font="바탕" size=1400 color=000000 bold=1
+    run "가 " font="바탕" size=1400 color=000000 bold=0
+    run "필요함" font="바탕" size=1400 color=000000 bold=1
+    run "을 " font="바탕" size=1400 color=000000 bold=0
+    run "안내" font="바탕" size=1400 color=000000 bold=1
+    run "하였다." font="바탕" size=1400 color=000000 bold=0
+  para align=3 indent l=0 r=0 first=0 space before=0 after=0 line=170%
+    seg textpos=0 vpos=59474 vsize=1400 th=1400 sp=980 hpos=0 hsize=48188
+    seg textpos=41 vpos=61854 vsize=1400 th=1400 sp=980 hpos=0 hsize=48188
+    seg textpos=81 vpos=64234 vsize=1400 th=1400 sp=980 hpos=0 hsize=48188
+    seg textpos=120 vpos=66614 vsize=1400 th=1400 sp=980 hpos=0 hsize=48188
+    run " " font="바탕" size=1400 color=000000 bold=0
+    run "식약처는 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=1,1,1,1,1,1,1
+    run "“시험을 잘 보게 하는 약은 없다”" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=1,1,1,1,1,1,1
+    run "며, 반드시 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=1,1,1,1,1,1,1
+    run "의사" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=1,1,1,1,1,1,1
+    run "의 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=1,1,1,1,1,1,1
+    run "처방" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=1,1,1,1,1,1,1
+    run " 후" font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=1,1,1,1,1,1,1
+    run " " font="바탕" size=1400 color=000000 bold=0
+    run "약사" font="바탕" size=1400 color=000000 bold=1
+    run "의 " font="바탕" size=1400 color=000000 bold=0
+    run "조제·복약 지도" font="바탕" size=1400 color=000000 bold=1
+    run "에 따라 " font="바탕" size=1400 color=000000 bold=0
+    run "안전" font="바탕" size=1400 color=000000 bold=1
+    run "하게 " font="바탕" size=1400 color=000000 bold=0
+    run "사용" font="바탕" size=1400 color=000000 bold=1
+    run "해야 하며, 이번 " font="바탕" size=1400 color=000000 bold=0
+    run "카드뉴스" font="바탕" size=1400 color=000000 bold=1
+    run "가" font="바탕" size=1400 color=000000 bold=0
+    run " " font="바탕" size=1400 color=000000 bold=1
+    run "의약품 허가사항" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=-1,-1,-1,-1,-1,-1,-1
+    run "에 따른 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=-1,-1,-1,-1,-1,-1,-1
+    run "올바른 정보" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=-1,-1,-1,-1,-1,-1,-1
+    run "를 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=-1,-1,-1,-1,-1,-1,-1
+    run "제공" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=-1,-1,-1,-1,-1,-1,-1
+    run "하여 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=-1,-1,-1,-1,-1,-1,-1
+    run "청소년" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=-1,-1,-1,-1,-1,-1,-1
+    run "들이 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=-1,-1,-1,-1,-1,-1,-1
+    run "프로프라놀롤" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=-1,-1,-1,-1,-1,-1,-1
+    run " 성분 의약품" font="바탕" size=1400 color=000000 bold=1
+    run "을 " font="바탕" size=1400 color=000000 bold=0
+    run "안전하게" font="바탕" size=1400 color=000000 bold=1
+    run " " font="바탕" size=1400 color=000000 bold=0
+    run "투약" font="바탕" size=1400 color=000000 bold=1
+    run "하는데 " font="바탕" size=1400 color=000000 bold=0
+    run "도움" font="바탕" size=1400 color=000000 bold=1
+    run "이 되기를 " font="바탕" size=1400 color=000000 bold=0
+    run "기대" font="바탕" size=1400 color=000000 bold=1
+    run "한다고 밝혔다." font="바탕" size=1400 color=000000 bold=0
+  para align=3 indent l=0 r=0 first=0 space before=0 after=0 line=170%
+    seg textpos=0 vpos=0 vsize=1400 th=1400 sp=980 hpos=0 hsize=48188
+    seg textpos=43 vpos=2380 vsize=1400 th=1400 sp=980 hpos=0 hsize=48188
+    seg textpos=82 vpos=4760 vsize=1400 th=1400 sp=980 hpos=0 hsize=48188
+    run " 아울러 식약처는 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=-5,-5,-5,-5,-5,-5,-5
+    run "의약품안전사용서비스" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=-5,-5,-5,-5,-5,-5,-5
+    run "(DUR)" font="바탕" size=1200 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=-5,-5,-5,-5,-5,-5,-5
+    run "*" font="바탕" size=1200 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=-5,-5,-5,-5,-5,-5,-5
+    run " 시스템의" font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=-5,-5,-5,-5,-5,-5,-5
+    run " " font="바탕" size=1400 color=000000 bold=0
+    run "알림" font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=3,3,3,3,3,3,3
+    run "(팝업)" font="바탕" size=1200 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=3,3,3,3,3,3,3
+    run " 및 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=3,3,3,3,3,3,3
+    run "대한의사협회·대한약사회" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=3,3,3,3,3,3,3
+    run " 등을 통해 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=3,3,3,3,3,3,3
+    run "의료기관" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=3,3,3,3,3,3,3
+    run " 및 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=3,3,3,3,3,3,3
+    run "약국" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=3,3,3,3,3,3,3
+    run "을" font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=3,3,3,3,3,3,3
+    run " " font="바탕" size=1400 color=000000 bold=0
+    run "대상" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=2,2,2,2,2,2,2
+    run "으로 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=2,2,2,2,2,2,2
+    run "처방·복약 상담 시" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=2,2,2,2,2,2,2
+    run " " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=2,2,2,2,2,2,2
+    run "환자 상태" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=2,2,2,2,2,2,2
+    run " 및 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=2,2,2,2,2,2,2
+    run "복용 목적" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=2,2,2,2,2,2,2
+    run " 등을 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=2,2,2,2,2,2,2
+    run "확인" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=2,2,2,2,2,2,2
+    run "하도록" font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=2,2,2,2,2,2,2
+    run " " font="바탕" size=1400 color=000000 bold=0
+    run "주의" font="바탕" size=1400 color=000000 bold=1
+    run "를 " font="바탕" size=1400 color=000000 bold=0
+    run "당부" font="바탕" size=1400 color=000000 bold=1
+    run "하였다. " font="바탕" size=1400 color=000000 bold=0
+  para align=3 indent l=300 r=200 first=-3503 space before=0 after=0 line=170%
+    seg textpos=0 vpos=7652 vsize=1200 th=1200 sp=840 hpos=300 hsize=47688
+    seg textpos=64 vpos=9692 vsize=1200 th=1200 sp=840 hpos=300 hsize=47688
+    seg textpos=105 vpos=11732 vsize=1200 th=1200 sp=840 hpos=300 hsize=47688
+    run " " font="맑은 고딕" size=1200 color=0000ff bold=0
+    run "   " font="맑은 고딕" size=1200 color=000000 bold=0
+    run "* 의약품안전사용서비스(DUR, Drug Utilization Review): 의약품 처방·조제 시 환자가" font="맑은 고딕" size=1200 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=-3,-3,-3,-3,-3,-3,-3
+    run " 현재 복용하고 있는 약과 병용금기 등 의약품 안전정보를 요양기관에 실시간 제공하여 부작용을 일으킬 수 있는 의약품 사용을 사전 점검하는 시스템" font="맑은 고딕" size=1200 color=000000 bold=0
+  para align=3 indent l=0 r=0 first=0 space before=0 after=0 line=170%
+    seg textpos=0 vpos=14964 vsize=1400 th=1400 sp=980 hpos=0 hsize=48188
+    seg textpos=49 vpos=17344 vsize=1400 th=1400 sp=980 hpos=0 hsize=48188
+    seg textpos=99 vpos=19724 vsize=1400 th=1400 sp=980 hpos=0 hsize=48188
+    run " " font="바탕" size=1400 color=000000 bold=0
+    run "해당 자료는 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=-2,-2,-2,-2,-2,-2,-2
+    run "‘식약처 누리집" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=-2,-2,-2,-2,-2,-2,-2
+    run "(www.mfds.go.kr)" font="바탕" size=1200 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=-2,-2,-2,-2,-2,-2,-2
+    run " " font="바탕" size=1200 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=-2,-2,-2,-2,-2,-2,-2
+    run "→ 법령/자료 → 홍보물자료 → 일반홍보물’ " font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=-2,-2,-2,-2,-2,-2,-2
+    run "또는 " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=-2,-2,-2,-2,-2,-2,-2
+    run "‘한국의약품안전관리원 누리집" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=-2,-2,-2,-2,-2,-2,-2
+    run "(www.drugsafe.or.kr)" font="바탕" size=1200 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=-2,-2,-2,-2,-2,-2,-2
+    run " " font="바탕" size=1200 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=-2,-2,-2,-2,-2,-2,-2
+    run "→ 교육·홍보 → 카드뉴스’" font="바탕" size=1400 color=000000 bold=1
+      metrics width=100,100,100,100,100,100,100 spacing=-2,-2,-2,-2,-2,-2,-2
+    run "에서 확인할 수 있다. " font="바탕" size=1400 color=000000 bold=0
+      metrics width=100,100,100,100,100,100,100 spacing=-2,-2,-2,-2,-2,-2,-2
+  para align=3 indent l=0 r=0 first=-3924 space before=0 after=0 line=170%
+    seg textpos=0 vpos=23296 vsize=1400 th=1400 sp=980 hpos=0 hsize=48188
+    run "<붙임> 카드뉴스" font="바탕" size=1400 color=000000 bold=0
