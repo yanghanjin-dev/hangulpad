@@ -2169,7 +2169,12 @@ hp_status hp_hwp_read_memory(const unsigned char *file, size_t file_len, hp_docu
             }
         }
         snprintf(part, sizeof(part), "BinData/image%u.%s", e->id, e->ext);
-        st = hp_package_add_entry(pkg, part, data, len, 1);
+        {
+            /* PNG/JPEG/GIF are already compressed; BMP, WMF and the rest shrink a lot */
+            const char *mt = media_type(e->ext);
+            int stored = strcmp(mt, "image/png") == 0 || strcmp(mt, "image/jpg") == 0 || strcmp(mt, "image/gif") == 0;
+            st = hp_package_add_entry(pkg, part, data, len, stored);
+        }
         free(data);
         if (st != HP_OK) {
             goto done;

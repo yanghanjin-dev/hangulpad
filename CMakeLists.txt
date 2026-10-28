@@ -23,17 +23,17 @@ target_link_libraries(hp PRIVATE hangulpad_engine)
 if(WIN32)
     enable_language(RC)
     set_source_files_properties(res/hangulpad.rc PROPERTIES
-        OBJECT_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/include/hp/version.h")
+        OBJECT_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/include/hp/version.h;${CMAKE_CURRENT_SOURCE_DIR}/res/hangulpad.manifest")
     target_sources(hp PRIVATE res/hangulpad.rc)
     target_link_libraries(hp PRIVATE shell32)
     add_executable(HangulPad WIN32 src/gui_win.c res/hangulpad.rc)
-    target_include_directories(HangulPad PRIVATE include)
+    target_include_directories(HangulPad PRIVATE include res) # res: manifest named in the .rc
     target_link_libraries(HangulPad PRIVATE hangulpad_engine
         comdlg32 user32 gdi32 shell32 ole32 uuid windowscodecs msimg32)
     if(MINGW)
         target_link_options(HangulPad PRIVATE -municode)
     endif()
-    target_include_directories(hp PRIVATE include)
+    target_include_directories(hp PRIVATE include res)
     if(NOT CMAKE_CROSSCOMPILING)
         get_filename_component(runtime_toolchain_bin "${CMAKE_C_COMPILER}" DIRECTORY)
         add_custom_target(copy-runtime-dlls ALL

@@ -7,7 +7,9 @@ A lightweight Korean word processor with a C11 HWP/HWPX engine and a Windows vie
 
 > **기본 개발 환경:** Windows PowerShell / MSYS2 UCRT64 / CMake / Ninja.
 
-**현재 버전: 0.9.0** (2026-10-29) — 변경 내역은 [`CHANGELOG.md`](CHANGELOG.md)
+**현재 버전: 0.9.1** (2026-10-29) — 변경 내역은 [`CHANGELOG.md`](CHANGELOG.md)
+
+0.9.1은 고해상도(화면 배율 125%·150% 등) 화면에서 문서와 대화상자를 선명하게 표시합니다.
 
 0.9.0은 **HWP 5.x 문서를 엽니다.** HWP 레코드를 같은 내용의 HWPX 부품으로 바꾸어 기존 HWPX 리더와
 화면 배치를 그대로 사용합니다. 배포용 문서는 읽기 전용으로 열리고, 암호 문서는 열지 않습니다.

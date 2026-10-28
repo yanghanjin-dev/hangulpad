@@ -1,4 +1,5 @@
-/* Windows file properties (Details tab) for HangulPad.exe / hp.exe */
+/* Windows file properties (Details tab) and the common-controls manifest
+ * (resource 2, activated in code) for HangulPad.exe / hp.exe */
 #include <winver.h>
 #include "hp/version.h"
 
@@ -16,7 +17,7 @@ BEGIN
         BLOCK "041204B0"
         BEGIN
             VALUE "CompanyName", "HangulPad project"
-            VALUE "FileDescription", "HangulPad - lightweight Korean word processor (HWPX)"
+            VALUE "FileDescription", "HangulPad - lightweight Korean word processor (HWP/HWPX)"
             VALUE "FileVersion", HP_VERSION_STRING
             VALUE "InternalName", "HangulPad"
             VALUE "LegalCopyright", "MIT OR Apache-2.0"
@@ -29,3 +30,6 @@ BEGIN
         VALUE "Translation", 0x0412, 1200
     END
 END
+
+/* RT_MANIFEST (24), id 2: see gui_win.c enable_visual_styles() */
+2 24 "hangulpad.manifest"
