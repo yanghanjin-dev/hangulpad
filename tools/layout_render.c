@@ -32,7 +32,7 @@ int main(int argc,char **argv) {
     FILE *f;char path[4096];int i,j,first=1,last;HRESULT hr;
     hp_utf8_args(&argc,&argv);
     if(argc<3 || argc>5) {fprintf(stderr,"usage: layout_render input.hwpx existing-output-directory [first-page [last-page]]\n");return 2;}
-    if(hp_hwpx_read(argv[1],&g_doc)!=HP_OK)return 1;
+    if(hp_document_read(argv[1],&g_doc)!=HP_OK)return 1;
     hr=CoInitializeEx(NULL,COINIT_APARTMENTTHREADED);
     if(SUCCEEDED(hr))CoCreateInstance(&CLSID_WICImagingFactory,NULL,CLSCTX_INPROC_SERVER,&IID_IWICImagingFactory,(void **)&g_wic);
     rebuild_flat();rebuild_pages(NULL);last=g_page_count;

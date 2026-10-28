@@ -3,6 +3,7 @@
  *   irdump <file.hwpx>            full dump
  *   irdump --flat <file.hwpx>     only the flat sec->paragraphs list */
 #include "hp/hwpx.h"
+#include "hp/hwp.h"
 #include "hp/ir.h"
 
 #include <stdio.h>
@@ -218,7 +219,7 @@ int main(int argc, char **argv) {
         fprintf(stderr, "usage: irdump [--flat] <file.hwpx>\n");
         return 2;
     }
-    st = hp_hwpx_read(path, &doc);
+    st = hp_document_read(path, &doc);
     if (st != HP_OK) {
         printf("error: %s\n", hp_status_string(st));
         return 1;

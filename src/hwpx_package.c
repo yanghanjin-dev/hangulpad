@@ -68,6 +68,37 @@ hp_status hp_package_add_section_part(hp_package *pkg, const char *name) {
     return HP_OK;
 }
 
+hp_status hp_package_add_entry(hp_package *pkg, const char *name, const void *data, size_t len, int stored) {
+    hp_package_entry *arr, *e;
+    if (!pkg || !name || (!data && len)) {
+        return HP_ERR_INVALID;
+    }
+    if (pkg->entry_count >= HP_PACKAGE_MAX_ENTRIES || len > (size_t)HP_PACKAGE_MAX_ENTRY_BYTES) {
+        return HP_ERR_INVALID;
+    }
+    arr = (hp_package_entry *)realloc(pkg->entries, (pkg->entry_count + 1) * sizeof(*arr));
+    if (!arr) {
+        return HP_ERR_NOMEM;
+    }
+    pkg->entries = arr;
+    e = &arr[pkg->entry_count];
+    memset(e, 0, sizeof(*e));
+    e->name = pkg_strdup(name);
+    e->data = (unsigned char *)malloc(len ? len : 1);
+    if (!e->name || !e->data) {
+        free(e->name);
+        free(e->data);
+        return HP_ERR_NOMEM;
+    }
+    if (len) {
+        memcpy(e->data, data, len);
+    }
+    e->len = len;
+    e->stored = stored;
+    pkg->entry_count++;
+    return HP_OK;
+}
+
 hp_status hp_package_load_zip(zip_t *za, hp_package **out) {
     hp_package *pkg;
     zip_int64_t n;

@@ -918,6 +918,9 @@ static hp_status write_preserving(const hp_document *doc, const char *path) {
 }
 
 hp_status hp_hwpx_write(const hp_document *doc, const char *path) {
+    if (doc && doc->package && doc->package->read_only) {
+        return HP_ERR_UNSUPPORTED; /* distribution-only document */
+    }
     if (!doc || !path) {
         return HP_ERR_INVALID;
     }

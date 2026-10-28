@@ -9,11 +9,12 @@ set(CMAKE_C_EXTENSIONS OFF)
 file(STRINGS "include/hp/version.h" version_line REGEX "^#define HP_VERSION_STRING")
 string(REGEX MATCH "[0-9]+\\.[0-9]+\\.[0-9]+" HP_VERSION "${version_line}")
 find_package(libzip CONFIG REQUIRED)
+find_package(ZLIB REQUIRED) # HWP 5.x streams are raw deflate
 add_library(hangulpad_engine STATIC
     src/common.c src/ir.c src/xml.c src/hwpx_package.c
-    src/hwpx_read.c src/hwpx_write.c src/edit.c src/hwp.c)
+    src/hwpx_read.c src/hwpx_write.c src/edit.c src/hwp.c src/cfb.c src/aes128.c)
 target_include_directories(hangulpad_engine PUBLIC include)
-target_link_libraries(hangulpad_engine PUBLIC libzip::zip)
+target_link_libraries(hangulpad_engine PUBLIC libzip::zip ZLIB::ZLIB)
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(hangulpad_engine PRIVATE -Wall -Wextra -Wpedantic)
 endif()
@@ -59,6 +60,8 @@ if(BUILD_TESTING)
     if(WIN32)
         target_link_libraries(test_edit PRIVATE shell32)
     endif()
+    add_executable(test_hwp tests/test_hwp.c)
+    target_link_libraries(test_hwp PRIVATE hangulpad_engine)
     add_executable(test_roundtrip tests/test_roundtrip.c)
     target_link_libraries(test_roundtrip PRIVATE hangulpad_engine)
     add_executable(test_pagination tests/test_pagination.c)
@@ -111,6 +114,8 @@ if(BUILD_TESTING)
     endforeach()
     set_tests_properties(${edit_tests} PROPERTIES WORKING_DIRECTORY "${test_work}"
         FIXTURES_REQUIRED test_work RESOURCE_LOCK edit_work)
+    add_test(NAME hwp COMMAND test_hwp "${CMAKE_CURRENT_SOURCE_DIR}")
+    set_tests_properties(hwp PROPERTIES WORKING_DIRECTORY "${test_work}" FIXTURES_REQUIRED test_work)
     add_test(NAME xml COMMAND test_xml)
     add_test(NAME roundtrip COMMAND test_roundtrip)
     add_test(NAME pagination COMMAND test_pagination)
@@ -127,6 +132,16 @@ if(BUILD_TESTING)
             "-DEMULATOR=${CMAKE_CROSSCOMPILING_EMULATOR}"
             -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/GoldenCheck.cmake")
     endforeach()
+    # HWP corpus: tests/golden/hwp-<name>.txt (same stems as the HWPX files).
+    file(GLOB golden_hwp_inputs RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}" CONFIGURE_DEPENDS "sample/corpus/*.hwp")
+    foreach(input IN LISTS golden_hwp_inputs)
+        get_filename_component(stem "${input}" NAME_WE)
+        add_test(NAME "golden-hwp-${stem}" COMMAND "${CMAKE_COMMAND}"
+            "-DPROGRAM=$<TARGET_FILE:irdump>" "-DINPUT=${input}"
+            "-DEXPECTED=tests/golden/hwp-${stem}.txt" "-DWORK_DIR=${CMAKE_CURRENT_SOURCE_DIR}"
+            "-DEMULATOR=${CMAKE_CROSSCOMPILING_EMULATOR}"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/GoldenCheck.cmake")
+    endforeach()
     # After an intended reader change: cmake --build <dir> --target golden-update,
     # then review the diff of tests/golden (files are written as LF, same as Linux).
     set(golden_update_cmds)
@@ -135,6 +150,14 @@ if(BUILD_TESTING)
         list(APPEND golden_update_cmds COMMAND "${CMAKE_COMMAND}"
             "-DPROGRAM=$<TARGET_FILE:irdump>" "-DINPUT=${input}"
             "-DOUTPUT=${CMAKE_CURRENT_SOURCE_DIR}/tests/golden/${stem}.txt"
+            "-DWORK_DIR=${CMAKE_CURRENT_SOURCE_DIR}" "-DEMULATOR=${CMAKE_CROSSCOMPILING_EMULATOR}"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/GoldenUpdate.cmake")
+    endforeach()
+    foreach(input IN LISTS golden_hwp_inputs)
+        get_filename_component(stem "${input}" NAME_WE)
+        list(APPEND golden_update_cmds COMMAND "${CMAKE_COMMAND}"
+            "-DPROGRAM=$<TARGET_FILE:irdump>" "-DINPUT=${input}"
+            "-DOUTPUT=${CMAKE_CURRENT_SOURCE_DIR}/tests/golden/hwp-${stem}.txt"
             "-DWORK_DIR=${CMAKE_CURRENT_SOURCE_DIR}" "-DEMULATOR=${CMAKE_CROSSCOMPILING_EMULATOR}"
             -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/GoldenUpdate.cmake")
     endforeach()

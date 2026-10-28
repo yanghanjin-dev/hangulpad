@@ -99,7 +99,7 @@ static void test_hwp_stub(void) {
         fclose(f);
     }
     EXPECT(hp_looks_like_hwp(path) == 1, "cfb detect");
-    EXPECT(hp_hwp_read(path, &doc) == HP_ERR_UNSUPPORTED, "read stub");
+    EXPECT(hp_hwp_read(path, &doc) != HP_OK && doc == NULL, "damaged compound file is rejected");
     EXPECT(hp_hwp_write(NULL, path) == HP_ERR_UNSUPPORTED, "write unsupported");
 }
 

@@ -51,7 +51,13 @@ static int editor_save(int save_as) {
     wchar_t path[MAX_PATH];char *utf8;hp_status st;OPENFILENAMEW ofn;
     if(!g_editor||!editor_commit())return 0;
     wcscpy(path,g_path);
-    if(save_as||!path[0]) {
+    if(g_source_hwp&&path[0]) {
+        /* Suggest the same name with .hwpx; the original .hwp is kept as it is. */
+        wchar_t *dot=wcsrchr(path,L'.'),*slash=wcsrchr(path,L'\\');
+        if(dot&&(!slash||dot>slash)&&(size_t)(dot-path)+6<MAX_PATH)wcscpy(dot,L".hwpx");
+        if(!save_as)MessageBoxW(g_main,L"HWP 문서는 HWPX 형식으로 변환하여 새 파일로 저장합니다. 원본 HWP 파일은 바뀌지 않습니다.",L"한글패드",MB_ICONINFORMATION);
+    }
+    if(save_as||!path[0]||g_source_hwp) {
         ZeroMemory(&ofn,sizeof(ofn));ofn.lStructSize=sizeof(ofn);ofn.hwndOwner=g_main;
         ofn.lpstrFile=path;ofn.nMaxFile=MAX_PATH;ofn.lpstrFilter=L"HWPX 문서 (*.hwpx)\0*.hwpx\0";
         ofn.lpstrDefExt=L"hwpx";ofn.Flags=OFN_OVERWRITEPROMPT|OFN_PATHMUSTEXIST|OFN_NOCHANGEDIR;
@@ -59,7 +65,7 @@ static int editor_save(int save_as) {
     }
     utf8=wide_to_utf8(path);if(!utf8)return 0;st=hp_editor_save(g_editor,utf8);free(utf8);
     if(st!=HP_OK){MessageBoxW(g_main,L"저장하지 못했습니다. 파일 경로와 쓰기 권한을 확인하세요. 편집 내용은 유지됩니다.",L"한글패드",MB_ICONERROR);return 0;}
-    wcscpy(g_path,path);g_dirty=0;editor_title();return 1;
+    wcscpy(g_path,path);g_dirty=0;g_source_hwp=0;editor_title();return 1;
 }
 static int editor_discard(void) {
     int answer;if(!g_dirty)return 1;
@@ -83,7 +89,7 @@ static void editor_new(void) {
     s=wide_to_utf8(path);doc=hp_document_from_text("");
     if(s&&doc&&hp_hwpx_write(doc,s)==HP_OK){
         /* open_document checks pending changes; they were handled above. */
-        g_dirty=0;open_document(g_main,path);g_path[0]=0;g_dirty=1;editor_title();editor_mode(1);
+        g_dirty=0;open_document(g_main,path);g_path[0]=0;g_source_hwp=0;g_dirty=1;editor_title();editor_mode(1);
     }
     hp_document_free(doc);free(s);DeleteFileW(path);
 }

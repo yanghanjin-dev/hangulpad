@@ -10,6 +10,7 @@
 #endif
 
 #include "hp/hwpx.h"
+#include "hp/hwp.h"
 #include "hp/edit.h"
 #include "hp/ir.h"
 #include "hp/version.h"
@@ -18,6 +19,7 @@
 #include "table_pagination.h"
 
 #include <windows.h>
+#include <shellapi.h>
 #include <commdlg.h>
 #include <wincodec.h>
 #include <objbase.h>
@@ -82,6 +84,10 @@ static hp_editor *g_editor;
 static HWND g_paralist,g_text,g_edit_button,g_preview_button,g_save_button;
 static size_t g_edit_index=(size_t)-1;
 static wchar_t g_path[MAX_PATH];
+/* The open file is HWP 5.x: saving writes HWPX to a new .hwpx file, never over the .hwp. */
+static int g_source_hwp;
+/* Distribution-only (배포용) HWP: shown, but editing and saving are disabled. */
+static int g_read_only;
 static int g_dirty,g_loading,g_editing;
 static int editor_discard(void);
 static void editor_list(size_t selected);
@@ -1864,15 +1870,26 @@ static void open_document(HWND hwnd, const wchar_t *path) {
     if (!utf8) {
         return;
     }
-    if (hp_hwpx_read(utf8, &doc) != HP_OK || !doc) {
-        free(utf8);
-        MessageBoxW(hwnd, L"HWPX 문서를 읽지 못했습니다.", L"한글패드", MB_ICONERROR);
-        return;
+    {
+        hp_status st = hp_document_read(utf8, &doc);
+        if (st != HP_OK || !doc) {
+            int is_hwp = hp_looks_like_hwp(utf8);
+            free(utf8);
+            MessageBoxW(hwnd,
+                        st == HP_ERR_UNSUPPORTED && is_hwp
+                            ? L"암호가 걸린 문서나 배포용 문서는 아직 열 수 없습니다."
+                            : is_hwp ? L"HWP 문서를 읽지 못했습니다." : L"문서를 읽지 못했습니다. HWP 또는 HWPX 파일인지 확인하세요.",
+                        L"한글패드", MB_ICONERROR);
+            return;
+        }
     }
-    if(hp_editor_open(utf8,&ed)!=HP_OK){hp_document_free(doc);free(utf8);MessageBoxW(hwnd,L"편집 문서를 준비하지 못했습니다.",L"한글패드",MB_ICONERROR);return;}
+    if(!hp_document_is_read_only(doc)&&hp_editor_open(utf8,&ed)!=HP_OK){hp_document_free(doc);free(utf8);MessageBoxW(hwnd,L"편집 문서를 준비하지 못했습니다.",L"한글패드",MB_ICONERROR);return;}
+    if(g_editing)editor_mode(0);
+    g_read_only=hp_document_is_read_only(doc);
     free(utf8);
     hp_editor_free(g_editor);g_editor=ed;g_edit_index=(size_t)-1;
     wcscpy(g_path,path);g_dirty=0;
+    {char *u=wide_to_utf8(path);g_source_hwp=u?hp_looks_like_hwp(u):0;free(u);}
     editor_list(0);
     free_doc();
     g_doc = doc;
@@ -1900,7 +1917,7 @@ static void file_open(HWND hwnd) {
     ofn.hwndOwner = hwnd;
     ofn.lpstrFile = file;
     ofn.nMaxFile = MAX_PATH;
-    ofn.lpstrFilter = L"HWPX 문서 (*.hwpx)\0*.hwpx\0모든 파일 (*.*)\0*.*\0";
+    ofn.lpstrFilter = L"한글 문서 (*.hwp;*.hwpx)\0*.hwp;*.hwpx\0HWPX 문서 (*.hwpx)\0*.hwpx\0HWP 문서 (*.hwp)\0*.hwp\0모든 파일 (*.*)\0*.*\0";
     ofn.nFilterIndex = 1;
     ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_EXPLORER | OFN_NOCHANGEDIR;
     ofn.lpstrDefExt = L"hwpx";
@@ -2031,9 +2048,12 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
         }
         switch (LOWORD(wParam)) {
         case IDM_FILE_NEW: editor_new();break;
-        case IDM_FILE_SAVE: editor_save(0);break;
-        case IDM_FILE_SAVE_AS: editor_save(1);break;
-        case IDM_EDIT_MODE: editor_mode(1);break;
+        case IDM_FILE_SAVE:
+        case IDM_FILE_SAVE_AS:
+        case IDM_EDIT_MODE:
+            if(g_read_only){MessageBoxW(hwnd,L"배포용 문서입니다. 읽을 수는 있지만 편집하거나 다른 형식으로 저장할 수 없습니다.",L"한글패드",MB_ICONINFORMATION);break;}
+            if(LOWORD(wParam)==IDM_EDIT_MODE)editor_mode(1);else editor_save(LOWORD(wParam)==IDM_FILE_SAVE_AS);
+            break;
         case IDM_PREVIEW: editor_preview();break;
         case IDM_ADD_PARA: editor_add();break;
         case IDM_DELETE_PARA: editor_remove();break;
@@ -2122,6 +2142,17 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE hPrev, PWSTR cmd, int show) {
         return 1;
     }
     ShowWindow(g_main, show);
+    {
+        /* Explorer "open with" / double-click passes the document path. */
+        int argc = 0;
+        wchar_t **argv = CommandLineToArgvW(GetCommandLineW(), &argc);
+        if (argv && argc >= 2 && argv[1][0]) {
+            open_document(g_main, argv[1]);
+        }
+        if (argv) {
+            LocalFree(argv);
+        }
+    }
     while (GetMessageW(&msg, NULL, 0, 0) > 0) {
         if(msg.message==WM_KEYDOWN&&(msg.wParam==VK_F2||msg.wParam==VK_F5)){SendMessageW(g_main,WM_COMMAND,msg.wParam==VK_F2?IDM_EDIT_MODE:IDM_PREVIEW,0);continue;}
         if (msg.message == WM_KEYDOWN && (GetKeyState(VK_CONTROL) & 0x8000)) {

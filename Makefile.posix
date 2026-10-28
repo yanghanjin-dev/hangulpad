@@ -3,12 +3,12 @@ CC ?= gcc
 CFLAGS ?= -std=c11 -Wall -Wextra -Wpedantic -O2
 CPPFLAGS += -Iinclude
 LDFLAGS +=
-LDLIBS += $(shell pkg-config --libs libzip 2>/dev/null || echo -lzip)
+LDLIBS += $(shell pkg-config --libs libzip 2>/dev/null || echo -lzip) -lz
 PREFIX ?= /usr/local
 # Version comes from include/hp/version.h (single source of truth).
 VERSION := $(shell sed -n 's/^#define HP_VERSION_STRING "\(.*\)"/\1/p' include/hp/version.h)
 
-LIB_SRCS := src/common.c src/ir.c src/xml.c src/hwpx_package.c src/hwpx_read.c src/hwpx_write.c src/edit.c src/hwp.c
+LIB_SRCS := src/common.c src/ir.c src/xml.c src/hwpx_package.c src/hwpx_read.c src/hwpx_write.c src/edit.c src/hwp.c src/cfb.c src/aes128.c
 LIB_OBJS := $(LIB_SRCS:src/%.c=build/%.o)
 
 .PHONY: fuzz golden-check golden-update irdump version all clean test cli check release release-windows release-windows-portable release-source install uninstall dist
@@ -32,7 +32,7 @@ dist/hangulpad-source.zip: | dist
 	@echo "source: $$(pwd)/dist/hangulpad-source.zip"
 	@ls -la dist/hangulpad-source.zip "dist/한글패드-소스코드.zip"
 
-build/%.o: src/%.c src/hwpx_package.h src/xml.h $(wildcard include/hp/*.h) | build
+build/%.o: src/%.c src/hwpx_package.h src/xml.h src/cfb.h src/aes128.h $(wildcard include/hp/*.h) | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
 build/cli.o: src/cli.c | build
@@ -90,7 +90,7 @@ install: dist/hp
 uninstall:
 	rm -f $(DESTDIR)$(PREFIX)/bin/hp
 
-test: build/test_roundtrip build/test_xml build/irdump build/test_line_layout build/test_page_flow build/test_pagination build/test_table_pagination
+test: build/test_hwp build/test_roundtrip build/test_xml build/irdump build/test_line_layout build/test_page_flow build/test_pagination build/test_table_pagination
 	./build/test_table_pagination
 	./build/test_page_flow
 	./build/test_line_layout
@@ -98,17 +98,22 @@ test: build/test_roundtrip build/test_xml build/irdump build/test_line_layout bu
 	./build/test_pagination
 	./build/test_xml
 	./build/test_roundtrip
+	./build/test_hwp .
 	@$(MAKE) --no-print-directory golden-check
 
 # Reader regression guard: the full IR of every sample must match tests/golden/.
 # After an intended reader change: make golden-update, then review `git diff tests/golden`.
 GOLDEN_INPUTS := $(wildcard sample/corpus/*.hwpx) $(wildcard tests/fixtures/*.hwpx)
+GOLDEN_HWP := $(wildcard sample/corpus/*.hwp)
 golden-check: build/irdump
 	@fail=0; for f in $(GOLDEN_INPUTS); do n=$$(basename "$$f" .hwpx); \
 	  if ! ./build/irdump "$$f" | cmp -s - "tests/golden/$$n.txt"; then echo "GOLDEN MISMATCH: $$n"; fail=1; fi; done; \
-	  if [ $$fail = 0 ]; then echo "golden IR matches ($(words $(GOLDEN_INPUTS)) files)"; else exit 1; fi
+	  for f in $(GOLDEN_HWP); do n=hwp-$$(basename "$$f" .hwp); \
+	  if ! ./build/irdump "$$f" | cmp -s - "tests/golden/$$n.txt"; then echo "GOLDEN MISMATCH: $$n"; fail=1; fi; done; \
+	  if [ $$fail = 0 ]; then echo "golden IR matches ($(words $(GOLDEN_INPUTS) $(GOLDEN_HWP)) files)"; else exit 1; fi
 golden-update: build/irdump
-	@for f in $(GOLDEN_INPUTS); do n=$$(basename "$$f" .hwpx); ./build/irdump "$$f" > "tests/golden/$$n.txt"; done; echo "tests/golden updated"
+	@for f in $(GOLDEN_INPUTS); do n=$$(basename "$$f" .hwpx); ./build/irdump "$$f" > "tests/golden/$$n.txt"; done; \
+	  for f in $(GOLDEN_HWP); do n=hwp-$$(basename "$$f" .hwp); ./build/irdump "$$f" > "tests/golden/$$n.txt"; done; echo "tests/golden updated"
 
 build/test_line_layout: tests/test_line_layout.c src/line_layout.h include/hp/ir.h | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/test_line_layout.c -o $@
@@ -125,17 +130,22 @@ build/test_pagination: tests/test_pagination.c $(LIB_OBJS)
 build/test_xml: tests/test_xml.c src/xml.c src/xml.h build/common.o | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/test_xml.c src/xml.c build/common.o -o $@
 
-# Fuzzers (clang + libFuzzer): make fuzz; build/fuzz_xml DIR; build/fuzz_reader DIR
+# Fuzzers (clang + libFuzzer): make fuzz; build/fuzz_xml DIR; build/fuzz_reader DIR; build/fuzz_hwp DIR (seed: small .hwp files)
 FUZZ_CC ?= clang
 FUZZ_FLAGS ?= -g -O1 -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=undefined
 fuzz: | build
 	$(FUZZ_CC) $(FUZZ_FLAGS) $(CPPFLAGS) -Isrc tests/fuzz/fuzz_xml.c src/xml.c src/common.c -o build/fuzz_xml
 	$(FUZZ_CC) $(FUZZ_FLAGS) $(CPPFLAGS) -Isrc tests/fuzz/fuzz_reader.c $(LIB_SRCS) -o build/fuzz_reader $(LDLIBS)
+	$(FUZZ_CC) $(FUZZ_FLAGS) $(CPPFLAGS) -Isrc tests/fuzz/fuzz_hwp.c $(LIB_SRCS) -o build/fuzz_hwp $(LDLIBS)
+	$(FUZZ_CC) $(FUZZ_FLAGS) $(CPPFLAGS) -DHP_FUZZING -Isrc tests/fuzz/fuzz_hwp_records.c $(LIB_SRCS) -o build/fuzz_hwp_records $(LDLIBS)
 
 # Dump the full IR of an HWPX file (regression checks): build/irdump file.hwpx
 irdump: build/irdump
 build/irdump: tests/irdump.c $(LIB_OBJS)
 	$(CC) $(CPPFLAGS) $(CFLAGS) tests/irdump.c $(LIB_OBJS) -o $@ $(LDLIBS)
+
+build/test_hwp: tests/test_hwp.c $(LIB_OBJS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) tests/test_hwp.c $(LIB_OBJS) -o $@ $(LDLIBS)
 
 build/test_roundtrip: build/test_roundtrip.o $(LIB_OBJS)
 	$(CC) $(LDFLAGS) $^ -o $@ $(LDLIBS)

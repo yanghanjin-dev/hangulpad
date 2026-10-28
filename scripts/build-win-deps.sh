@@ -24,7 +24,7 @@ fi
 
 if [[ ! -f "$WIN_PREFIX/lib/libzip.a" ]]; then
   curl -fsSL -o "libzip-${LIBZIP_VER}.tar.xz" \
-    "https://libzip.org/download/libzip-${LIBZIP_VER}.tar.xz"
+    "https://github.com/nih-at/libzip/releases/download/v${LIBZIP_VER}/libzip-${LIBZIP_VER}.tar.xz"
   tar xf "libzip-${LIBZIP_VER}.tar.xz"
   cmake -S "libzip-${LIBZIP_VER}" -B "libzip-${LIBZIP_VER}/build" \
     -DCMAKE_SYSTEM_NAME=Windows \

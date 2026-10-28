@@ -38,12 +38,19 @@ typedef struct hp_package {
     char **section_parts;      /* section index → entry name (e.g. Contents/section0.xml) */
     size_t section_part_count;
     char *loaded_title;        /* doc->title as read; differs → content.hpf title is patched */
+    int read_only;             /* distribution-only HWP: may be viewed, not edited or saved */
 } hp_package;
 
 hp_status hp_package_load_zip(zip_t *za, hp_package **out);
 void hp_package_free(hp_package *pkg);
 const hp_package_entry *hp_package_find(const hp_package *pkg, const char *name);
 hp_status hp_package_add_section_part(hp_package *pkg, const char *name);
+/* Append a part (data is copied). Used to assemble packages in memory. */
+hp_status hp_package_add_entry(hp_package *pkg, const char *name, const void *data, size_t len, int stored);
+
+struct hp_document;
+/* Read a document from an in-memory package; takes ownership of pkg (hwpx_read.c). */
+hp_status hp_hwpx_read_package(hp_package *pkg, struct hp_document **out_doc);
 
 #ifdef __cplusplus
 }

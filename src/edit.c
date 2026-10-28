@@ -1,5 +1,6 @@
 /* Source-span editing: retain package parts and all controls outside edited text. */
 #include "hp/edit.h"
+#include "hp/hwp.h"
 #include "hwpx_package.h"
 #include "xml.h"
 #include <stdlib.h>
@@ -44,7 +45,8 @@ int hp_editor_can_delete(const hp_editor *e,size_t i){return e&&i<e->count&&e->i
 void hp_editor_free(hp_editor *e){size_t i;if(!e)return;for(i=0;i<e->count;i++){free(e->items[i].text);free(e->items[i].original);}for(i=0;e->xml&&i<e->doc->section_count;i++)hp_xml_free(e->xml[i]);free(e->xml);free(e->items);hp_document_free(e->doc);free(e);}
 hp_status hp_editor_open(const char *path,hp_editor **out){
     hp_editor *e=calloc(1,sizeof(*e));size_t si;hp_status st;if(!out||!path){free(e);return HP_ERR_INVALID;}*out=NULL;if(!e)return HP_ERR_NOMEM;
-    st=hp_hwpx_read(path,&e->doc);if(st!=HP_OK){hp_editor_free(e);return st;}
+    st=hp_document_read(path,&e->doc);if(st!=HP_OK){hp_editor_free(e);return st;}
+    if(hp_document_is_read_only(e->doc)){hp_editor_free(e);return HP_ERR_UNSUPPORTED;}
     e->xml=calloc(e->doc->section_count,sizeof(*e->xml));if(!e->xml){hp_editor_free(e);return HP_ERR_NOMEM;}
     for(si=0;si<e->doc->section_count;si++){
         const hp_package_entry *part=hp_package_find(e->doc->package,e->doc->package->section_parts[si]);hp_xml_node *root,*p;

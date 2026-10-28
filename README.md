@@ -1,13 +1,17 @@
 # 한글패드 / HangulPad
 
 가볍고 단순한 한글 워드 프로세서를 목표로 하는 오픈소스 프로젝트입니다.  
-C11 문서 엔진과 Windows Win32 문서 보기 UI를 개발하고 있습니다.
+C11 문서 엔진과 Windows Win32 문서 보기·편집 UI를 개발하고 있습니다. **HWP 5.x와 HWPX를 모두 엽니다.**
 
-A lightweight Korean word processor with a C11 HWPX engine and a Windows viewer.
+A lightweight Korean word processor with a C11 HWP/HWPX engine and a Windows viewer/editor.
 
 > **기본 개발 환경:** Windows PowerShell / MSYS2 UCRT64 / CMake / Ninja.
 
-**현재 버전: 0.8.4** (2026-10-27) — 변경 내역은 [`CHANGELOG.md`](CHANGELOG.md)
+**현재 버전: 0.9.0** (2026-10-29) — 변경 내역은 [`CHANGELOG.md`](CHANGELOG.md)
+
+0.9.0은 **HWP 5.x 문서를 엽니다.** HWP 레코드를 같은 내용의 HWPX 부품으로 바꾸어 기존 HWPX 리더와
+화면 배치를 그대로 사용합니다. 배포용 문서는 읽기 전용으로 열리고, 암호 문서는 열지 않습니다.
+HWP 문서를 저장하면 원본은 그대로 두고 새 `.hwpx` 파일로 저장합니다. [HWP 읽기 구현과 검증](docs/hwp-reader-v090-2026-10-29.md).
 
 0.8.4는 PDF 41쪽 대조를 바탕으로 투명 그림, 목차 탭, 상자 번호, 표 앵커·셀 여백·테두리를 개선했습니다. [전체 대조와 남은 차이](docs/pdf-fidelity-v084-2026-10-27.md).
 
@@ -38,15 +42,15 @@ A lightweight Korean word processor with a C11 HWPX engine and a Windows viewer.
 적용되지 않습니다. 편집하지 않은 기존 본문은 원본을 유지하지만 수정 후 한컴과 동일한 페이지 수나
 줄바꿈을 보장하지 않습니다. ZIP 내부의 기존 미리보기 이미지는 갱신하지 않습니다.
 
-## Status (Phase 0–1 scaffold)
+## Status
 
 | Area | Status |
 |------|--------|
-| `hp` IR (`include/hp/ir.h`) | MVP (paragraph / run / section) |
+| `hp` IR (`include/hp/ir.h`) | paragraphs/runs/sections, tables (nested), images, containers, equations, saved line layout |
 | XML parser (`src/xml.c`) | Own dependency-free DOM parser: entities, char refs, CDATA, namespaces (local names), byte spans for lossless patching, depth limit 512, fuzzed |
 | HWPX read/write | Read: paragraphs/styles/tables/images/floats/equations. **Save is lossless** for opened files — every original part is kept byte-for-byte; only changed parts are regenerated (appended paragraphs are inserted into the original section XML, title is patched in `content.hpf`). New documents get a minimal package. |
-| HWP 5.x | **Read stub** (CFB detect only) |
-| CLI (`build/hp`) | `open` / `new` / `save` / `append` / `roundtrip` / `probe` / `--version` (UTF-8/Korean paths on Windows) |
+| HWP 5.x | **Read** (`src/cfb.c` compound file, `src/hwp.c` records → OWPML parts → HWPX reader; distribution-only docs read-only; password/DRM refused). Write: no — HWP documents are saved as HWPX |
+| CLI (`build/hp`) | `open` / `new` / `save` (also `.hwp` → `.hwpx`) / `append` / `roundtrip` / `probe` / `--version` (UTF-8/Korean paths on Windows) |
 | Desktop UI (Windows) | `HangulPad.exe` engine layout (fonts, tables/nested, images, floats, containers, equations) |
 | Full HWP record parse / HWP write | Deferred |
 
@@ -185,11 +189,10 @@ MIT OR Apache-2.0 — see [`LICENSE`](LICENSE), [`LICENSE-MIT`](LICENSE-MIT), [`
 
 See [`NOTICE`](NOTICE) for the Hancom HWP / OWPML attribution placeholder required when referencing Hancom's public format documentation.
 
-## Non-goals (this PR)
+## Not yet
 
-- Tables/shapes/headers full fidelity (paragraph text styles are rendered)
-- Binary HWP write
-- Complete WordPad-class editing UI
+- Binary HWP write (HWP documents are saved as HWPX)
+- WYSIWYG editing on the page, formatting commands, printing
 
 
 

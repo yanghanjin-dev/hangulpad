@@ -409,12 +409,14 @@ static void parse_header_styles(const hp_xml_node *root, hp_style_tables *st) {
         ls = find_last(metric_scope, "lineSpacing");
         if (ls) {
             const char *type = hp_xml_attr(ls, "type");
-            int val = (int)attr_l(ls, "value", 160);
+            /* 64-bit and clamped: hostile values must not overflow (fuzzing, v0.9.0). */
+            long long val = attr_l(ls, "value", 160);
             if (type && strcmp(type, "PERCENT") == 0) {
-                ps->line_spacing_percent = val > 0 ? val : 160;
+                ps->line_spacing_percent = val > 0 ? (int)(val > 5000 ? 5000 : val) : 160;
             } else if (val > 0) {
                 /* FIXED/AT_LEAST/BETWEEN_LINES (HWPUNIT): approximate as % of 10pt */
-                ps->line_spacing_percent = (val * 100) / 1000;
+                long long pct = val > 1000000 ? 100000 : (val * 100) / 1000;
+                ps->line_spacing_percent = (int)(pct > 5000 ? 5000 : pct);
                 if (ps->line_spacing_percent < 100) {
                     ps->line_spacing_percent = 100;
                 }
@@ -1035,6 +1037,44 @@ static hp_status parse_cell_content(const hp_xml_node *tc, const hp_style_tables
     return HP_OK;
 }
 
+/* A cell's saved line layout must have been made for that cell: Hancom's lines
+ * end at the cell's inner width minus the paragraph indents. Some files (Hancom's
+ * own HWPX -> HWP conversion among them) store placeholder lines instead — the
+ * default 150 mm body width and every line at vertpos 0 — which would wrap at the
+ * wrong width and draw lines on top of each other. Such lines are dropped and the
+ * viewer lays the paragraph out itself. */
+static void drop_implausible_cell_lines(hp_table_cell *cell) {
+    size_t i, k;
+    int64_t inner = (int64_t)cell->width_hwp - (int64_t)cell->pad_left_hwp - (int64_t)cell->pad_right_hwp;
+    if (!cell->width_hwp || inner < 3000) {
+        return; /* tiny cells: small overhangs are normal */
+    }
+    for (i = 0; i < cell->paragraph_count; i++) {
+        hp_paragraph *para = &cell->paragraphs[i];
+        int64_t expected = inner - para->indent_left_hwp - para->indent_right_hwp;
+        int64_t tolerance = expected / 50 > 300 ? expected / 50 : 300;
+        int bad = 0;
+        if (para->object_anchor_only) {
+            continue; /* the object's own line */
+        }
+        for (k = 0; k < para->seg_count && !bad; k++) {
+            const hp_line_seg *g = &para->segs[k];
+            int64_t end = (int64_t)hp_hwp_signed(g->horzpos_hwp) + (int64_t)hp_hwp_signed(g->horzsize_hwp);
+            if (end > expected + tolerance || end < expected - tolerance) {
+                bad = 1; /* laid out for another width */
+            }
+            if (k > 0 && g->vertpos_hwp <= para->segs[k - 1].vertpos_hwp) {
+                bad = 1; /* lines on top of each other */
+            }
+        }
+        if (bad) {
+            free(para->segs);
+            para->segs = NULL;
+            para->seg_count = 0;
+        }
+    }
+}
+
 static hp_table *parse_table(const hp_xml_node *tbl, const hp_style_tables *st) {
     hp_table *table = (hp_table *)calloc(1, sizeof(*table));
     hp_xml_node *tr, *tc;
@@ -1091,6 +1131,7 @@ static hp_table *parse_table(const hp_xml_node *tbl, const hp_style_tables *st) 
             cell.pad_top_hwp = cm ? (uint32_t)attr_l(cm, "top", 140) : 140;
             cell.pad_bottom_hwp = cm ? (uint32_t)attr_l(cm, "bottom", 140) : 140;
             parse_cell_content(tc, st, &cell);
+            drop_implausible_cell_lines(&cell);
             arr = (hp_table_cell *)realloc(table->cells, (table->cell_count + 1) * sizeof(*arr));
             if (!arr) {
                 break; /* cell contents leak only on OOM; table stays consistent */
@@ -1496,10 +1537,10 @@ static char *first_text(const hp_xml_node *root, const char *name, const char *d
     return s;
 }
 
-hp_status hp_hwpx_read(const char *path, hp_document **out_doc) {
-    zip_t *za;
-    int zerr = 0;
-    hp_package *pkg = NULL;
+/* Build the document from an in-memory package. Takes ownership of pkg: on
+ * success it becomes doc->package, on failure it is freed. Used for .hwpx files
+ * and for HWP 5.x files converted to OWPML parts in memory (hwp.c). */
+hp_status hp_hwpx_read_package(hp_package *pkg, hp_document **out_doc) {
     hp_document *doc = NULL;
     hp_style_tables styles;
     hp_xml_doc *xml = NULL;
@@ -1509,21 +1550,11 @@ hp_status hp_hwpx_read(const char *path, hp_document **out_doc) {
     size_t section_total = 0, sec_i;
 
     memset(&styles, 0, sizeof(styles));
-    if (!path || !out_doc) {
+    if (!pkg || !out_doc) {
+        hp_package_free(pkg);
         return HP_ERR_INVALID;
     }
     *out_doc = NULL;
-
-    za = zip_open(path, ZIP_RDONLY, &zerr);
-    if (!za) {
-        return HP_ERR_IO;
-    }
-    /* Keep every original part so a later save can be lossless; parse from memory. */
-    st = hp_package_load_zip(za, &pkg);
-    zip_close(za);
-    if (st != HP_OK) {
-        return st;
-    }
 
     mt = hp_package_find(pkg, "mimetype");
     {
@@ -1650,6 +1681,28 @@ fail:
     hp_document_free(doc);
     hp_package_free(pkg);
     return st;
+}
+
+hp_status hp_hwpx_read(const char *path, hp_document **out_doc) {
+    zip_t *za;
+    int zerr = 0;
+    hp_package *pkg = NULL;
+    hp_status st;
+    if (!path || !out_doc) {
+        return HP_ERR_INVALID;
+    }
+    *out_doc = NULL;
+    za = zip_open(path, ZIP_RDONLY, &zerr);
+    if (!za) {
+        return HP_ERR_IO;
+    }
+    /* Keep every original part so a later save can be lossless; parse from memory. */
+    st = hp_package_load_zip(za, &pkg);
+    zip_close(za);
+    if (st != HP_OK) {
+        return st;
+    }
+    return hp_hwpx_read_package(pkg, out_doc);
 }
 
 hp_status hp_hwpx_roundtrip(const char *input, const char *output, hp_document **out_doc) {

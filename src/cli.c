@@ -15,7 +15,7 @@ static void usage(const char *argv0) {
             "Usage:\n"
             "  %s open <input>\n"
             "  %s new <output.hwpx> [--text TEXT] [--title TITLE]\n"
-            "  %s save <input.hwpx> <output.hwpx>      (lossless: keeps tables/images/styles)\n"
+            "  %s save <input.hwpx|.hwp> <output.hwpx>  (lossless for .hwpx; .hwp is converted)\n"
             "  %s append <input.hwpx> <output.hwpx> --text TEXT [--text TEXT ...]\n"
             "  %s roundtrip <input.hwpx> <output.hwpx>\n"
             "  %s probe <input>\n"
@@ -145,7 +145,7 @@ int main(int argc, char **argv) {
             usage(argv[0]);
             return 1;
         }
-        st = hp_hwpx_read(argv[2], &doc);
+        st = open_any(argv[2], &doc);
         if (st != HP_OK) {
             fprintf(stderr, "error: %s\n", hp_status_string(st));
             return 1;
