@@ -31,6 +31,50 @@ static int styled(void){
     CHECK(strstr((const char *)p->data,"<hp:t>라마바사</hp:t>"));
     hp_document_free(d);hp_editor_free(e);return 0;
 }
+
+/* Formatting: apply to every k-th paragraph, save, reopen, and read the formats back. */
+static int formatting(const char *path,const char *out,size_t step){
+    hp_editor *e=NULL,*again=NULL;size_t i,n,done=0;hp_char_format cf,got;hp_para_format pf,gp;
+    CHECK(hp_editor_open(path,&e)==HP_OK);n=hp_editor_count(e);
+    memset(&cf,0,sizeof(cf));memset(&pf,0,sizeof(pf));
+    CHECK(hp_editor_get_format(e,0,&got,&gp)==HP_OK);CHECK(got.size_hwp>=100);
+    cf.fields=HP_CF_BOLD|HP_CF_ITALIC|HP_CF_SIZE|HP_CF_FACE|HP_CF_COLOR|HP_CF_UNDERLINE|HP_CF_STRIKEOUT;
+    cf.bold=1;cf.italic=1;cf.size_hwp=1500;strcpy(cf.face,"새 글꼴 시험");cf.color_rgb=0xC00000;cf.underline=1;cf.strikeout=1;
+    pf.fields=HP_PF_ALIGN|HP_PF_LINE_SPACING|HP_PF_LEFT|HP_PF_RIGHT|HP_PF_INDENT|HP_PF_BEFORE|HP_PF_AFTER;
+    pf.align=HP_ALIGN_CENTER;pf.line_spacing_percent=200;pf.left_hwp=1000;pf.right_hwp=600;pf.indent_hwp=-400;pf.before_hwp=500;pf.after_hwp=300;
+    { hp_char_format bad=cf;bad.size_hwp=5;CHECK(hp_editor_apply_char_format(e,0,&bad)==HP_ERR_INVALID);}
+    { hp_para_format bad=pf;bad.align=9;CHECK(hp_editor_apply_para_format(e,0,&bad)==HP_ERR_INVALID);}
+    for(i=0;i<n;i+=step){
+        hp_char_format c=cf;hp_para_format f=pf;
+        if((i/step)%2){c.fields=HP_CF_BOLD|HP_CF_SIZE;c.bold=0;c.size_hwp=2000;f.fields=HP_PF_ALIGN;f.align=HP_ALIGN_RIGHT;}
+        CHECK(hp_editor_apply_char_format(e,i,&c)==HP_OK);CHECK(hp_editor_apply_para_format(e,i,&f)==HP_OK);done++;
+    }
+    CHECK(hp_editor_save(e,out)==HP_OK);
+    CHECK(hp_editor_open(out,&again)==HP_OK);CHECK(hp_editor_count(again)==n);
+    for(i=0;i<n;i++){
+        hp_char_format a,b;hp_para_format x,y;
+        CHECK(hp_editor_get_format(e,i,&a,&x)==HP_OK);CHECK(hp_editor_get_format(again,i,&b,&y)==HP_OK);
+        CHECK(!strcmp(hp_editor_text(e,i),hp_editor_text(again,i)));
+        if(a.size_hwp!=b.size_hwp||a.bold!=b.bold||a.italic!=b.italic||a.underline!=b.underline||a.strikeout!=b.strikeout||a.color_rgb!=b.color_rgb||strcmp(a.face,b.face)||
+           x.align!=y.align||x.line_spacing_percent!=y.line_spacing_percent||x.left_hwp!=y.left_hwp||x.right_hwp!=y.right_hwp||x.indent_hwp!=y.indent_hwp||x.before_hwp!=y.before_hwp||x.after_hwp!=y.after_hwp){
+            fprintf(stderr,"format mismatch at %zu: size %u/%u bold %d/%d face %s/%s align %d/%d ls %d/%d left %d/%d indent %d/%d\n",i,a.size_hwp,b.size_hwp,a.bold,b.bold,a.face,b.face,x.align,y.align,x.line_spacing_percent,y.line_spacing_percent,(int)x.left_hwp,(int)y.left_hwp,(int)x.indent_hwp,(int)y.indent_hwp);
+            return 1;
+        }
+    }
+    CHECK(hp_editor_get_format(again,0,&got,&gp)==HP_OK);
+    CHECK(got.bold&&got.italic&&got.underline&&got.strikeout&&got.size_hwp==1500&&got.color_rgb==0xC00000&&!strcmp(got.face,"새 글꼴 시험"));
+    CHECK(gp.align==HP_ALIGN_CENTER&&gp.line_spacing_percent==200&&gp.left_hwp==1000&&gp.indent_hwp==-400&&gp.after_hwp==300);
+    {   hp_document *d=NULL;size_t k;int seen=0;
+        CHECK(hp_hwpx_read(out,&d)==HP_OK);
+        for(k=0;k<d->sections[0].block_count&&!seen;k++){const hp_block *bl=&d->sections[0].blocks[k];
+            if(bl->kind==HP_BLOCK_PARAGRAPH&&bl->paragraph.run_count){const hp_paragraph *pp=&bl->paragraph;
+                CHECK(pp->align==HP_ALIGN_CENTER);CHECK(pp->line_spacing_percent==200);CHECK(pp->runs[0].bold&&pp->runs[0].italic);
+                CHECK(pp->runs[0].font_size_hwp==1500);CHECK(!strcmp(pp->runs[0].font_face,"새 글꼴 시험"));seen=1;}}
+        CHECK(seen||d->sections[0].block_count==0||d->sections[0].blocks[0].kind!=HP_BLOCK_PARAGRAPH);hp_document_free(d);
+    }
+    printf("Formatted paragraphs saved and reread: %zu of %zu\n",done,n);
+    hp_editor_free(e);hp_editor_free(again);return 0;
+}
 static int corpus(const char *path){
     hp_editor *e=NULL,*again=NULL;size_t i,n,changed=0;char out[100],raw[100]; unsigned long key=0;const unsigned char *q=(const unsigned char *)path;for(;*q;q++)key=key*33+*q;snprintf(out,sizeof(out),"tmp/edit-corpus-%lu.hwpx",key);snprintf(raw,sizeof(raw),"tmp/edit-corpus-%lu-raw.hwpx",key);
     CHECK(hp_editor_open(path,&e)==HP_OK);n=hp_editor_count(e);CHECK(n>10);
@@ -43,6 +87,7 @@ static int corpus(const char *path){
     CHECK(hp_editor_open(out,&again)==HP_OK);CHECK(hp_editor_count(again)==n);
     for(i=0;i<n;i++)CHECK(!strcmp(hp_editor_text(e,i),hp_editor_text(again,i)));
     printf("Corpus paragraphs edited and reread: %zu; unchanged package parts preserved\n",changed);
+    {char fmt[100];snprintf(fmt,sizeof(fmt),"tmp/edit-corpus-%lu-fmt.hwpx",key);CHECK(formatting(out,fmt,3)==0);}
     hp_editor_free(e);hp_editor_free(again);return 0;
 }
 int main(int argc,char **argv){
@@ -69,7 +114,8 @@ int main(int argc,char **argv){
     CHECK(hp_editor_open(out,&again)==HP_OK);CHECK(hp_editor_count(again)==n);
     for(i=0;i<n;i++)if(*hp_editor_text(again,i))CHECK(!strcmp(hp_editor_text(again,i),"표 안과 본문 수정 & 보존"));
     CHECK(hp_editor_save(e,"no-such-directory/out.hwpx")!=HP_OK);
-    hp_editor_free(e);hp_editor_free(again);CHECK(styled()==0);puts("Text replacement, insert/delete, Unicode, table preservation, repeat save passed");return 0;
+    hp_editor_free(e);hp_editor_free(again);CHECK(styled()==0);{hp_document *g=hp_document_from_text("글자 모양 시험");CHECK(g);CHECK(hp_section_add_paragraph_text(&g->sections[0],"둘째")==HP_OK);CHECK(hp_hwpx_write(g,"tmp/edit-format-src.hwpx")==HP_OK);hp_document_free(g);}
+    CHECK(formatting("tmp/edit-format-src.hwpx","tmp/edit-format.hwpx",1)==0);CHECK(formatting("tmp/edit-output.hwpx","tmp/edit-format-t2.hwpx",1)==0);CHECK(formatting("tests/fixtures/table_pagination.hwpx","tmp/edit-format-table.hwpx",2)==0);puts("Text replacement, insert/delete, Unicode, table preservation, repeat save passed");return 0;
 }
 
 
