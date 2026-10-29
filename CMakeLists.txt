@@ -29,7 +29,7 @@ if(WIN32)
     add_executable(HangulPad WIN32 src/gui_win.c res/hangulpad.rc)
     target_include_directories(HangulPad PRIVATE include res) # res: manifest named in the .rc
     target_link_libraries(HangulPad PRIVATE hangulpad_engine
-        comdlg32 user32 gdi32 shell32 ole32 uuid windowscodecs msimg32)
+        comdlg32 comctl32 user32 gdi32 shell32 ole32 uuid windowscodecs msimg32)
     if(MINGW)
         target_link_options(HangulPad PRIVATE -municode)
     endif()
@@ -74,24 +74,24 @@ if(BUILD_TESTING)
         target_link_libraries(irdump PRIVATE shell32) # UTF-8 arguments (Korean sample names)
         add_executable(test_gui_fidelity tests/test_gui_fidelity.c)
         target_link_libraries(test_gui_fidelity PRIVATE hangulpad_engine
-            comdlg32 user32 gdi32 shell32 ole32 uuid windowscodecs msimg32)
+            comdlg32 comctl32 user32 gdi32 shell32 ole32 uuid windowscodecs msimg32)
         add_test(NAME gui-fidelity COMMAND test_gui_fidelity)
         set_tests_properties(gui-fidelity PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
         add_executable(test_gui_decorations tests/test_gui_decorations.c)
         target_link_libraries(test_gui_decorations PRIVATE hangulpad_engine
-            comdlg32 user32 gdi32 shell32 ole32 uuid windowscodecs msimg32)
+            comdlg32 comctl32 user32 gdi32 shell32 ole32 uuid windowscodecs msimg32)
         add_test(NAME gui-decorations COMMAND test_gui_decorations)
         set_tests_properties(gui-decorations PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
         add_executable(test_gui_edit tests/test_gui_edit.c)
         target_link_libraries(test_gui_edit PRIVATE hangulpad_engine
-            comdlg32 user32 gdi32 shell32 ole32 uuid windowscodecs msimg32)
+            comdlg32 comctl32 user32 gdi32 shell32 ole32 uuid windowscodecs msimg32)
         add_test(NAME gui-edit COMMAND test_gui_edit)
         add_executable(test_gui_layout tests/test_gui_layout.c)
         target_link_libraries(test_gui_layout PRIVATE hangulpad_engine
-            comdlg32 user32 gdi32 shell32 ole32 uuid windowscodecs msimg32)
+            comdlg32 comctl32 user32 gdi32 shell32 ole32 uuid windowscodecs msimg32)
         add_executable(layout_render tools/layout_render.c)
         target_link_libraries(layout_render PRIVATE hangulpad_engine
-            comdlg32 user32 gdi32 shell32 ole32 uuid windowscodecs msimg32)
+            comdlg32 comctl32 user32 gdi32 shell32 ole32 uuid windowscodecs msimg32)
         add_test(NAME gui-layout COMMAND test_gui_layout)
         set_tests_properties(gui-layout PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
     endif()

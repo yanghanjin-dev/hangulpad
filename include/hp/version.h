@@ -9,19 +9,19 @@
 #define HP_VERSION_H
 
 #define HP_VERSION_MAJOR 0
-#define HP_VERSION_MINOR 9
-#define HP_VERSION_PATCH 1
-#define HP_VERSION_STRING "0.9.1"
-#define HP_VERSION_DATE "2026-10-29"
+#define HP_VERSION_MINOR 10
+#define HP_VERSION_PATCH 0
+#define HP_VERSION_STRING "0.10.0"
+#define HP_VERSION_DATE "2026-10-30"
 
 /* "0, 9, 1, 0" — Hangul-style appVersion written into new documents' version.xml */
-#define HP_VERSION_COMMAS "0, 9, 1, 0"
+#define HP_VERSION_COMMAS "0, 10, 0, 0"
 
 #ifndef RC_INVOKED
 #ifdef __cplusplus
 extern "C" {
 #endif
-const char *hp_version(void); /* "0.9.1" (for FFI callers) */
+const char *hp_version(void); /* e.g. "0.10.0" (for FFI callers) */
 #ifdef __cplusplus
 }
 #endif

@@ -7,7 +7,10 @@ A lightweight Korean word processor with a C11 HWP/HWPX engine and a Windows vie
 
 > **기본 개발 환경:** Windows PowerShell / MSYS2 UCRT64 / CMake / Ninja.
 
-**현재 버전: 0.9.1** (2026-10-29) — 변경 내역은 [`CHANGELOG.md`](CHANGELOG.md)
+**현재 버전: 0.10.0** (2026-10-30) — 변경 내역은 [`CHANGELOG.md`](CHANGELOG.md)
+
+0.10.0은 **한글 2010 방식의 메뉴·도구 상자·상황선**과 **글자 모양·문단 모양**, 찾기/바꾸기, 화면 확대·두 쪽 보기,
+인쇄, 문서 정보, 최근 문서를 추가했습니다. 아직 없는 기능은 메뉴에 흐리게 표시합니다. [메뉴와 기능 구현 내역](docs/menus-v0100-2026-10-30.md).
 
 0.9.1은 고해상도(화면 배율 125%·150% 등) 화면에서 문서와 대화상자를 선명하게 표시합니다.
 
@@ -25,20 +28,22 @@ HWP 문서를 저장하면 원본은 그대로 두고 새 `.hwpx` 파일로 저�
 
 ## 본문 편집 (0.8.0)
 
-새 문서 또는 기존 HWPX에서 상단 **본문 편집**을 누르면 왼쪽 문단 목록과 오른쪽 입력창이 나타납니다.
+새 문서 또는 기존 HWPX에서 **본문 편집**(F2, 도구 상자 "편")을 누르면 왼쪽 문단 목록과 오른쪽 입력창이 나타납니다.
 본문·표 셀·중첩 표 안 문단을 선택하여 텍스트를 수정할 수 있습니다. 선택·복사·잘라내기·붙여넣기·
 실행 취소는 Windows 기본 입력창을 사용하며 한글 IME를 지원합니다.
 
-- `Ctrl+N`: 새 문서, `Ctrl+O`: 열기, `Ctrl+S`: 저장, `Ctrl+Shift+S`: 다른 이름으로 저장.
+- `Alt+N`/`Ctrl+N`: 새 문서, `Alt+O`/`Ctrl+O`: 불러오기, `Alt+S`/`Ctrl+S`: 저장, `Alt+V`: 다른 이름으로 저장.
 - `Enter`: 문단 안 줄바꿈, `Ctrl+Enter`: 선택 문단 뒤에 새 문단 추가. 편집 메뉴에서 문단 삭제.
-- `F2`: 본문 편집, `F5`: 현재 편집 내용을 페이지로 미리보기.
+- `F2`: 본문 편집 ↔ 쪽 보기, `F5`: 미리 보기. 편집 중에는 입력창 아래에 쪽 미리 보기가 함께 표시됩니다.
+- `Alt+L` 글자 모양, `Alt+T` 문단 모양, `Ctrl+B/I/U`, `Ctrl+Shift+M/L/C/R/T`(정렬) — 문단 목록에서 여러 문단을 골라 한 번에 적용.
+- `Ctrl+F` 찾기, `Ctrl+H` 찾아 바꾸기, `Alt+G` 찾아가기, `Alt+P` 인쇄. 전체 목록: 도움말 → 단축키 일람.
 - 제목의 `*`는 저장하지 않은 변경입니다. 다른 문서를 열거나 종료할 때 저장 여부를 확인합니다.
 
 저장은 원본 XML의 텍스트 범위만 교체하며 그림·표·구역 설정과 다른 패키지 부품을 보존합니다.
 바뀐 구간은 해당 run의 서식을 사용하고, 새 문단은 기준 문단의 문단/글자 스타일을 상속합니다.
 수정한 문단의 오래된 줄 위치 정보는 제거하여 다시 배치합니다. 엔진 API는 `include/hp/edit.h`입니다.
 
-현재 편집은 **문단별 텍스트 편집**입니다. 페이지 위에 직접 입력하는 WYSIWYG, 글꼴/크기/정렬 변경,
+현재 편집은 **문단별 텍스트 편집과 문단 단위 서식**입니다. 페이지 위에 직접 입력하는 WYSIWYG, 문단 안 일부 글자의 서식,
 개체 삽입·삭제·이동, 구역 구성 변경은 지원하지 않습니다. 개체·구역 제어를 포함한 문단과 영역의
 마지막 문단 삭제는 거부합니다. 실행 취소는 현재 선택 문단의 텍스트 입력에 적용되며 문단 추가·삭제에는
 적용되지 않습니다. 편집하지 않은 기존 본문은 원본을 유지하지만 수정 후 한컴과 동일한 페이지 수나
@@ -53,7 +58,7 @@ HWP 문서를 저장하면 원본은 그대로 두고 새 `.hwpx` 파일로 저�
 | HWPX read/write | Read: paragraphs/styles/tables/images/floats/equations. **Save is lossless** for opened files — every original part is kept byte-for-byte; only changed parts are regenerated (appended paragraphs are inserted into the original section XML, title is patched in `content.hpf`). New documents get a minimal package. |
 | HWP 5.x | **Read** (`src/cfb.c` compound file, `src/hwp.c` records → OWPML parts → HWPX reader; distribution-only docs read-only; password/DRM refused). Write: no — HWP documents are saved as HWPX |
 | CLI (`build/hp`) | `open` / `new` / `save` (also `.hwp` → `.hwpx`) / `append` / `roundtrip` / `probe` / `--version` (UTF-8/Korean paths on Windows) |
-| Desktop UI (Windows) | `HangulPad.exe` engine layout (fonts, tables/nested, images, floats, containers, equations) |
+| Desktop UI (Windows) | `HangulPad.exe` engine layout (fonts, tables/nested, images, floats, containers, equations); 0.10.0: classic 한글 menus, two toolbars, status bar, zoom/fit/two-page view, character/paragraph format dialogs, find/replace, print |
 | Full HWP record parse / HWP write | Deferred |
 
 GUI 0.7.1은 명시적 페이지/단 나눔·구역별 용지 설정과 긴 표/문단의 페이지 분할을 지원합니다.
@@ -194,7 +199,8 @@ See [`NOTICE`](NOTICE) for the Hancom HWP / OWPML attribution placeholder requir
 ## Not yet
 
 - Binary HWP write (HWP documents are saved as HWPX)
-- WYSIWYG editing on the page, formatting commands, printing
+- WYSIWYG editing on the page; formatting of part of a paragraph (0.10.0 formats whole paragraphs)
+- Styles, numbering/bullets, page setup editing, table/picture editing (menus are present, greyed)
 
 
 

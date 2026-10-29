@@ -37,18 +37,20 @@ static void editor_list(size_t selected) {
         index=(int)SendMessageW(g_paralist,LB_ADDSTRING,0,(LPARAM)label);
         SendMessageW(g_paralist,LB_SETITEMDATA,index,(LPARAM)i);if(i==selected)sel=row;row++;
     }
-    SendMessageW(g_paralist,LB_SETCURSEL,sel,0);
+    SendMessageW(g_paralist,LB_SETSEL,FALSE,-1);SendMessageW(g_paralist,LB_SETSEL,TRUE,sel);SendMessageW(g_paralist,LB_SETCARETINDEX,sel,FALSE);
     if(row)editor_select((size_t)SendMessageW(g_paralist,LB_GETITEMDATA,sel,0));
+    format_sync();
 }
 static void editor_mode(int editing) {
     RECT r;g_editing=editing;
     ShowWindow(g_paralist,editing?SW_SHOW:SW_HIDE);ShowWindow(g_text,editing?SW_SHOW:SW_HIDE);
     GetClientRect(g_main,&r);layout_children(r.right,r.bottom);InvalidateRect(g_main,NULL,TRUE);
-    CheckMenuItem(GetMenu(g_main),IDM_EDIT_MODE,MF_BYCOMMAND|(editing?MF_CHECKED:MF_UNCHECKED));
-    if(editing){SetWindowTextW(g_status,L"Enter: 줄바꿈 · Ctrl+Enter: 문단 추가");SetFocus(g_text);}else update_status();
+    update_status();format_sync();
+    if(editing){status_message(L"Enter: 줄바꿈 · Ctrl+Enter: 문단 추가 · 여러 문단 선택: Shift/Ctrl+클릭 · Alt+L 글자 모양 · Alt+T 문단 모양");SetFocus(g_text);}
+    else{status_message(L"");if(g_view)SetFocus(g_view);}
 }
 static int editor_save(int save_as) {
-    wchar_t path[MAX_PATH];char *utf8;hp_status st;OPENFILENAMEW ofn;
+    wchar_t path[MAX_PATH];char *utf8;hp_status st;OPENFILENAMEW ofn;int chosen=0;
     if(!g_editor||!editor_commit())return 0;
     wcscpy(path,g_path);
     if(g_source_hwp&&path[0]) {
@@ -62,10 +64,13 @@ static int editor_save(int save_as) {
         ofn.lpstrFile=path;ofn.nMaxFile=MAX_PATH;ofn.lpstrFilter=L"HWPX 문서 (*.hwpx)\0*.hwpx\0";
         ofn.lpstrDefExt=L"hwpx";ofn.Flags=OFN_OVERWRITEPROMPT|OFN_PATHMUSTEXIST|OFN_NOCHANGEDIR;
         if(!GetSaveFileNameW(&ofn))return 0;
+        chosen=1;
     }
     utf8=wide_to_utf8(path);if(!utf8)return 0;st=hp_editor_save(g_editor,utf8);free(utf8);
     if(st!=HP_OK){MessageBoxW(g_main,L"저장하지 못했습니다. 파일 경로와 쓰기 권한을 확인하세요. 편집 내용은 유지됩니다.",L"한글패드",MB_ICONERROR);return 0;}
-    wcscpy(g_path,path);g_dirty=0;g_source_hwp=0;editor_title();return 1;
+    wcscpy(g_path,path);g_dirty=0;g_source_hwp=0;editor_title();status_refresh();
+    if(chosen)recent_add(path); /* only files the user picked */
+    return 1;
 }
 static int editor_discard(void) {
     int answer;if(!g_dirty)return 1;
@@ -73,14 +78,9 @@ static int editor_discard(void) {
     return answer==IDYES?editor_save(0):answer==IDNO;
 }
 static void editor_preview(void) {
-    wchar_t dir[MAX_PATH],path[MAX_PATH];char *s;hp_document *doc=NULL;
     if(!g_editor||!editor_commit())return;
-    if(!GetTempPathW(MAX_PATH,dir)||!GetTempFileNameW(dir,L"hpe",0,path))return;
-    s=wide_to_utf8(path);
-    if(s&&hp_editor_save(g_editor,s)==HP_OK&&hp_hwpx_read(s,&doc)==HP_OK) {
-        free_doc();g_doc=doc;rebuild_flat();rebuild_pages(g_main);update_status();editor_mode(0);
-    }else MessageBoxW(g_main,L"미리보기를 만들지 못했습니다.",L"한글패드",MB_ICONERROR);
-    free(s);DeleteFileW(path);
+    if(preview_build())editor_mode(0);
+    else MessageBoxW(g_main,L"미리보기를 만들지 못했습니다.",L"한글패드",MB_ICONERROR);
 }
 static void editor_new(void) {
     wchar_t dir[MAX_PATH],path[MAX_PATH];char *s;hp_document *doc;
@@ -96,13 +96,13 @@ static void editor_new(void) {
 static void editor_add(void) {
     hp_status st;size_t added;if(!editor_commit()||g_edit_index==(size_t)-1)return;
     st=hp_editor_insert(g_editor,g_edit_index,&added);
-    if(st==HP_OK){g_dirty=1;editor_title();editor_list(added);SetFocus(g_text);}
+    if(st==HP_OK){g_dirty=1;editor_title();editor_list(added);SetFocus(g_text);schedule_preview(250);}
     else MessageBoxW(g_main,L"이 위치에 문단을 추가하지 못했습니다.",L"한글패드",MB_ICONERROR);
 }
 static void editor_remove(void) {
     size_t i=g_edit_index;if(!editor_commit()||i==(size_t)-1)return;
     if(hp_editor_delete(g_editor,i)!=HP_OK){MessageBoxW(g_main,L"구역·표·그림 등의 개체가 있는 문단과 영역의 마지막 문단은 삭제할 수 없습니다. 문단의 텍스트는 편집할 수 있습니다.",L"한글패드",MB_ICONINFORMATION);return;}
-    g_dirty=1;editor_title();editor_list(0);
+    g_dirty=1;editor_title();editor_list(i>0?i-1:0);schedule_preview(250);
 }
 
 

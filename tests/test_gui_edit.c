@@ -21,8 +21,23 @@ int main(void){
     editor_preview();CHECK(!g_editing&&g_doc&&g_dirty);CHECK(!strcmp(hp_editor_text(g_editor,1),"수정 후 미리보기"));
     editor_mode(1);CHECK(editor_save(0));CHECK(hp_editor_open(utf8,&saved)==HP_OK);
     CHECK(!strcmp(hp_editor_text(saved,1),"수정 후 미리보기"));hp_editor_free(saved);
+    /* 0.10.0: formatting commands, find, zoom */
+    {   hp_char_format cf;hp_para_format pf;
+        list_select_item(0);SendMessageW(g_main,WM_COMMAND,IDM_BOLD,0);SendMessageW(g_main,WM_COMMAND,IDM_ALIGN_CENTER,0);
+        SendMessageW(g_main,WM_COMMAND,IDM_SIZE_UP,0);SendMessageW(g_main,WM_COMMAND,IDM_COLOR_BASE+1,0);
+        CHECK(hp_editor_get_format(g_editor,0,&cf,&pf)==HP_OK);CHECK(cf.bold&&pf.align==HP_ALIGN_CENTER&&cf.size_hwp==1100&&cf.color_rgb==0xFF0000);
+        CHECK(SendMessageW(g_tb_fmt,TB_ISBUTTONCHECKED,IDM_BOLD,0));
+        wcscpy(g_find_what,L"미리보기");CHECK(find_next(1,0,1));CHECK(g_edit_index==1);
+        {DWORD a=0,b=0;SendMessageW(g_text,EM_GETSEL,(WPARAM)&a,(LPARAM)&b);CHECK(a==5&&b==9);}
+        wcscpy(g_replace_with,L"확인");CHECK(replace_all(1)==1);CHECK(!strcmp(hp_editor_text(g_editor,1),"수정 후 확인"));
+        set_zoom(ZOOM_PERCENT,150);CHECK(view_zoom_percent()==150);set_zoom(ZOOM_FIT_PAGE,100);CHECK(g_zoom_mode==ZOOM_FIT_PAGE);
+        CHECK(editor_save(0));CHECK(hp_editor_open(utf8,&saved)==HP_OK);
+        CHECK(hp_editor_get_format(saved,0,&cf,&pf)==HP_OK);CHECK(cf.bold&&pf.align==HP_ALIGN_CENTER&&cf.size_hwp==1100&&cf.color_rgb==0xFF0000);
+        CHECK(!strcmp(hp_editor_text(saved,1),"수정 후 확인"));hp_editor_free(saved);saved=NULL;
+    }
+    list_select_item(1);
     editor_remove();CHECK(g_dirty);CHECK(editor_save(0));CHECK(hp_editor_open(utf8,&saved)==HP_OK);CHECK(hp_editor_count(saved)==1);hp_editor_free(saved);
-    free(utf8);DeleteFileW(path);DestroyWindow(g_main);puts("Native GUI new/edit/insert/preview/save/reedit/delete passed");return 0;
+    free(utf8);DeleteFileW(path);DestroyWindow(g_main);puts("Native GUI new/edit/insert/preview/format/find/replace/zoom/save/reedit/delete passed");return 0;
 }
 
 

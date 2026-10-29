@@ -66,7 +66,6 @@ static HFONT g_ui_font, g_edit_font;
 static int S(int v) {
     return MulDiv(v, g_dpi, 96);
 }
-#define TOOLBAR_H S(40)
 #define FONT_SCALE 8
 static int g_paper_width = 794, g_paper_height = 1123;
 static size_t g_layout_section;
@@ -91,12 +90,10 @@ typedef struct { int block, column, y, offset, height, header_height; } layout_p
 static int g_unsafe_table_cuts, g_suppressed_headers;
 
 static HWND g_main;
-static HWND g_btn_prev;
-static HWND g_btn_next;
 static HWND g_status;
 static hp_document *g_doc;
 static hp_editor *g_editor;
-static HWND g_paralist,g_text,g_edit_button,g_preview_button,g_save_button;
+static HWND g_paralist,g_text,g_view;
 static size_t g_edit_index=(size_t)-1;
 static wchar_t g_path[MAX_PATH];
 /* The open file is HWP 5.x: saving writes HWPX to a new .hwpx file, never over the .hwp. */
@@ -112,6 +109,15 @@ static void editor_list(size_t selected);
 static void editor_title(void);
 static void editor_mode(int editing);
 static void open_document(HWND hwnd,const wchar_t *path);
+/* gui_ui.inc */
+static void update_status(void);
+static void status_refresh(void);
+static void status_message(const wchar_t *text);
+static void format_sync(void);
+static int preview_build(void);
+static void schedule_preview(int delay_ms);
+static void recent_add(const wchar_t *path);
+static void open_and_remember(HWND hwnd, const wchar_t *path);
 static flat_ref *g_flat;
 static int g_flat_capacity;
 static int g_flat_count;
@@ -313,18 +319,6 @@ static HFONT font_for_glyph(HDC dc,const hp_run *run,const wchar_t *text,int len
         }
     }
     free(source);SelectObject(dc,old);return font;
-}
-
-static void update_status(void) {
-    wchar_t buf[200];
-    if (g_doc && g_page_count > 0) {
-        swprintf(buf, 200, L"%d / %d 쪽%ls", g_page_index + 1, g_page_count, g_read_only ? L"  ·  배포용 문서(읽기 전용)" : L"");
-    } else {
-        wcscpy(buf, L"파일 → 열기 또는 샘플 문서 열기");
-    }
-    SetWindowTextW(g_status, buf);
-    EnableWindow(g_btn_prev, g_page_index > 0);
-    EnableWindow(g_btn_next, g_page_index + 1 < g_page_count);
 }
 
 static void rebuild_flat(void) {
@@ -1803,84 +1797,6 @@ static void paint_document_page(HDC mem,int page_index) {
     }
 }
 
-static void paint_document(HWND hwnd) {
-    PAINTSTRUCT ps;
-    HDC hdc = BeginPaint(hwnd, &ps);
-    RECT rc;
-    HBRUSH bg;
-    int avail_w, avail_h, dw, dh, dx, dy;
-    float scale;
-    HDC mem;
-    HBITMAP bmp, oldbmp;
-
-    GetClientRect(hwnd, &rc);
-    rc.top = TOOLBAR_H;
-    bg = CreateSolidBrush(RGB(82, 82, 82));
-    FillRect(hdc, &rc, bg);
-    DeleteObject(bg);
-
-    if (!g_doc || g_page_count == 0) {
-        SetBkMode(hdc, TRANSPARENT);
-        SetTextColor(hdc, RGB(240, 240, 240));
-        {
-            HGDIOBJ old_font = SelectObject(hdc, g_ui_font ? (HGDIOBJ)g_ui_font : GetStockObject(DEFAULT_GUI_FONT));
-            TextOutW(hdc, S(24), TOOLBAR_H + S(24), L"HWP 또는 HWPX 문서를 열어 주세요.",
-                     (int)wcslen(L"HWP 또는 HWPX 문서를 열어 주세요."));
-            SelectObject(hdc, old_font);
-        }
-        EndPaint(hwnd, &ps);
-        return;
-    }
-
-    use_section(g_pages[g_page_index].section);
-    avail_w = rc.right - rc.left - S(24);
-    avail_h = rc.bottom - rc.top - S(24);
-    scale = (float)avail_w / (float)PAGE_W_PX;
-    if ((float)PAGE_H_PX * scale > (float)avail_h) {
-        scale = (float)avail_h / (float)PAGE_H_PX;
-    }
-    if (scale < 0.2f) {
-        scale = 0.2f;
-    }
-    dw = (int)(PAGE_W_PX * scale);
-    dh = (int)(PAGE_H_PX * scale);
-    dx = rc.left + (avail_w - dw) / 2 + S(12);
-    dy = rc.top + (avail_h - dh) / 2 + S(12);
-    if (dw < 1 || dh < 1) {
-        EndPaint(hwnd, &ps);
-        return;
-    }
-
-    /* Paint at the on-screen size: the page is described in 96-dpi page pixels
-     * and the mapping mode scales it, so GDI rasterizes glyphs and lines at the
-     * final resolution instead of stretching a small bitmap (blurred text). */
-    mem = CreateCompatibleDC(hdc);
-    bmp = CreateCompatibleBitmap(hdc, dw, dh);
-    oldbmp = (HBITMAP)SelectObject(mem, bmp);
-    SetMapMode(mem, MM_ANISOTROPIC);
-    SetWindowExtEx(mem, PAGE_W_PX, PAGE_H_PX, NULL);
-    SetViewportExtEx(mem, dw, dh, NULL);
-    {
-        RECT pr = {0, 0, PAGE_W_PX, PAGE_H_PX};
-        FillRect(mem, &pr, (HBRUSH)GetStockObject(WHITE_BRUSH));
-    }
-    paint_document_page(mem,g_page_index);
-    SetGraphicsMode(mem, GM_ADVANCED);
-    ModifyWorldTransform(mem, NULL, MWT_IDENTITY);
-    SetGraphicsMode(mem, GM_COMPATIBLE);
-    SelectClipRgn(mem, NULL);
-    SetMapMode(mem, MM_TEXT);
-    {
-        RECT sh = {dx + S(4), dy + S(4), dx + dw + S(4), dy + dh + S(4)};
-        FillRect(hdc, &sh, (HBRUSH)GetStockObject(BLACK_BRUSH));
-    }
-    BitBlt(hdc, dx, dy, dw, dh, mem, 0, 0, SRCCOPY);
-    SelectObject(mem, oldbmp);
-    DeleteObject(bmp);
-    DeleteDC(mem);
-    EndPaint(hwnd, &ps);
-}
-
 static void free_doc(void) {
     int font_index;for(font_index=0;font_index<g_regular_font_count;font_index++)DeleteObject(g_regular_fonts[font_index].font);g_regular_font_count=0;
     if (g_doc) {
@@ -1958,7 +1874,7 @@ static void file_open(HWND hwnd) {
     ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_EXPLORER | OFN_NOCHANGEDIR;
     ofn.lpstrDefExt = L"hwpx";
     if (GetOpenFileNameW(&ofn)) {
-        open_document(hwnd, file);
+        open_and_remember(hwnd, file);
     }
 }
 
@@ -1987,24 +1903,13 @@ static void open_sample(HWND hwnd) {
 static void about(HWND hwnd) {
     MessageBoxW(hwnd,
                 L"한글패드 " HP_VERSION_STRING L" (" HP_VERSION_DATE L")\n"
-                L"HWPX 문단 편집 및 페이지 보기\n\n"
-                L"본문·표 안 텍스트 편집, 문단 추가·삭제와 저장을 지원합니다.\n"
-                L"F2: 본문 편집 / F5: 페이지 미리보기\n\n"
+                L"HWP·HWPX 문서 보기, 편집, 인쇄\n\n"
+                L"본문·표 안 텍스트 편집, 문단 추가·삭제, 글자·문단 모양,\n"
+                L"찾기·바꾸기, 화면 확대, 인쇄와 HWPX 저장을 지원합니다.\n"
+                L"F2: 본문 편집 / F5: 미리 보기 / 도움말 → 단축키 일람\n\n"
                 L"본 제품은 한글과컴퓨터의 HWP 문서 파일(.hwp) 공개 문서를 "
                 L"참고하여 개발하였습니다.",
                 L"한글패드 정보", MB_OK | MB_ICONINFORMATION);
-}
-
-static void layout_children(int cx, int cy) {
-    int h = S(28), y = S(6), status_x = S(496);
-    if(g_editing){int lw=cx/3;if(lw>S(340))lw=S(340);MoveWindow(g_paralist,S(8),TOOLBAR_H+S(4),lw-S(12),cy-TOOLBAR_H-S(12),TRUE);MoveWindow(g_text,lw+S(4),TOOLBAR_H+S(4),cx-lw-S(12),cy-TOOLBAR_H-S(12),TRUE);}
-    MoveWindow(g_btn_prev, S(8), y, S(100), h, TRUE);
-    MoveWindow(g_btn_next, S(116), y, S(100), h, TRUE);
-    MoveWindow(g_edit_button, S(224), y, S(80), h, TRUE);
-    MoveWindow(g_preview_button, S(310), y, S(100), h, TRUE);
-    MoveWindow(g_save_button, S(416), y, S(70), h, TRUE);
-    /* vertically centre the single-line status text beside the buttons */
-    MoveWindow(g_status, status_x, y + S(6), cx > status_x + S(14) ? cx - status_x - S(10) : 0, h - S(6), TRUE);
 }
 
 /* ---- high DPI ---- */
@@ -2056,193 +1961,10 @@ static void enable_visual_styles(void) {
     }
 }
 
-static void apply_ui_fonts(void) {
-    HWND controls[] = {g_btn_prev, g_btn_next, g_status, g_edit_button, g_preview_button, g_save_button, g_paralist};
-    HFONT ui, edit;
-    size_t i;
-    ui = CreateFontW(-MulDiv(9, g_dpi, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, 0, 0,
-                     CLEARTYPE_QUALITY, 0, L"Malgun Gothic");
-    edit = CreateFontW(-MulDiv(11, g_dpi, 72), 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, 0, 0,
-                       CLEARTYPE_QUALITY, 0, L"Malgun Gothic");
-    for (i = 0; i < sizeof(controls) / sizeof(controls[0]); i++) {
-        if (controls[i]) {
-            SendMessageW(controls[i], WM_SETFONT, (WPARAM)(ui ? (HGDIOBJ)ui : GetStockObject(DEFAULT_GUI_FONT)), TRUE);
-        }
-    }
-    if (g_text) {
-        SendMessageW(g_text, WM_SETFONT, (WPARAM)(edit ? (HGDIOBJ)edit : GetStockObject(DEFAULT_GUI_FONT)), TRUE);
-    }
-    if (g_ui_font) {
-        DeleteObject(g_ui_font);
-    }
-    if (g_edit_font) {
-        DeleteObject(g_edit_font);
-    }
-    g_ui_font = ui;
-    g_edit_font = edit;
-}
-
-static void goto_page(HWND hwnd, int idx) {
-    if (idx < 0 || idx >= g_page_count) {
-        return;
-    }
-    g_page_index = idx;
-    update_status();
-    InvalidateRect(hwnd, NULL, TRUE);
-}
-
-static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
-    switch (msg) {
-    case WM_CREATE: {
-        HMENU menubar = CreateMenu();
-        HMENU file = CreatePopupMenu();
-        HMENU help = CreatePopupMenu();
-        HMENU edit = CreatePopupMenu();
-        AppendMenuW(file, MF_STRING, IDM_FILE_NEW, L"새 문서\tCtrl+N");
-        AppendMenuW(file, MF_STRING, IDM_FILE_SAVE, L"저장\tCtrl+S");
-        AppendMenuW(file, MF_STRING, IDM_FILE_SAVE_AS, L"다른 이름으로 저장\tCtrl+Shift+S");
-        AppendMenuW(file, MF_SEPARATOR, 0, NULL);
-        AppendMenuW(edit, MF_STRING, IDM_EDIT_MODE, L"본문 편집\tF2");
-        AppendMenuW(edit, MF_STRING, IDM_PREVIEW, L"페이지 미리보기\tF5");
-        AppendMenuW(edit, MF_STRING, IDM_ADD_PARA, L"선택 문단 뒤에 문단 추가\tCtrl+Enter");
-        AppendMenuW(edit, MF_STRING, IDM_DELETE_PARA, L"선택 문단 삭제");
-        AppendMenuW(edit, MF_SEPARATOR, 0, NULL);
-        AppendMenuW(edit, MF_STRING, IDM_UNDO, L"실행 취소\tCtrl+Z");
-        AppendMenuW(edit, MF_STRING, IDM_CUT, L"잘라내기\tCtrl+X");
-        AppendMenuW(edit, MF_STRING, IDM_COPY, L"복사\tCtrl+C");
-        AppendMenuW(edit, MF_STRING, IDM_PASTE, L"붙여넣기\tCtrl+V");
-        AppendMenuW(edit, MF_STRING, IDM_SELECT_ALL, L"전체 선택\tCtrl+A");
-        AppendMenuW(file, MF_STRING, IDM_FILE_OPEN_SAMPLE, L"샘플 문서 열기\tCtrl+1");
-        AppendMenuW(file, MF_STRING, IDM_FILE_OPEN, L"열기...\tCtrl+O");
-        AppendMenuW(file, MF_SEPARATOR, 0, NULL);
-        AppendMenuW(file, MF_STRING, IDM_FILE_EXIT, L"종료");
-        AppendMenuW(help, MF_STRING, IDM_HELP_ABOUT, L"한글패드 정보");
-        AppendMenuW(help, MF_STRING, IDM_FONT_REPORT, L"대체 글꼴 내역");
-        AppendMenuW(menubar, MF_POPUP, (UINT_PTR)file, L"파일");
-        AppendMenuW(menubar, MF_POPUP, (UINT_PTR)edit, L"편집");
-        AppendMenuW(menubar, MF_POPUP, (UINT_PTR)help, L"도움말");
-        SetMenu(hwnd, menubar);
-        g_btn_prev = CreateWindowW(L"BUTTON", L"◀ 이전", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, 0, 0, 0, 0,
-                                   hwnd, (HMENU)(INT_PTR)ID_BTN_PREV, GetModuleHandleW(NULL), NULL);
-        g_btn_next = CreateWindowW(L"BUTTON", L"다음 ▶", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, 0, 0, 0, 0, hwnd,
-                                   (HMENU)(INT_PTR)ID_BTN_NEXT, GetModuleHandleW(NULL), NULL);
-        g_status = CreateWindowW(L"STATIC", L"", WS_CHILD | WS_VISIBLE, 0, 0, 0, 0, hwnd,
-                                 (HMENU)(INT_PTR)ID_STATUS, GetModuleHandleW(NULL), NULL);
-        g_edit_button=CreateWindowW(L"BUTTON",L"본문 편집",WS_CHILD|WS_VISIBLE|BS_PUSHBUTTON,0,0,0,0,hwnd,(HMENU)(INT_PTR)IDM_EDIT_MODE,GetModuleHandleW(NULL),NULL);
-        g_preview_button=CreateWindowW(L"BUTTON",L"미리보기",WS_CHILD|WS_VISIBLE|BS_PUSHBUTTON,0,0,0,0,hwnd,(HMENU)(INT_PTR)IDM_PREVIEW,GetModuleHandleW(NULL),NULL);
-        g_save_button=CreateWindowW(L"BUTTON",L"저장",WS_CHILD|WS_VISIBLE|BS_PUSHBUTTON,0,0,0,0,hwnd,(HMENU)(INT_PTR)IDM_FILE_SAVE,GetModuleHandleW(NULL),NULL);
-        g_paralist=CreateWindowExW(WS_EX_CLIENTEDGE,L"LISTBOX",L"",WS_CHILD|WS_VSCROLL|WS_TABSTOP|LBS_NOTIFY|LBS_NOINTEGRALHEIGHT,0,0,0,0,hwnd,(HMENU)(INT_PTR)ID_PARALIST,GetModuleHandleW(NULL),NULL);
-        g_text=CreateWindowExW(WS_EX_CLIENTEDGE,L"EDIT",L"",WS_CHILD|WS_VSCROLL|WS_TABSTOP|ES_MULTILINE|ES_AUTOVSCROLL|ES_WANTRETURN|WS_HSCROLL|ES_NOHIDESEL,0,0,0,0,hwnd,(HMENU)(INT_PTR)ID_TEXT,GetModuleHandleW(NULL),NULL);
-        SendMessageW(g_text,EM_SETLIMITTEXT,16*1024*1024,0);
-        g_dpi = window_dpi(hwnd);
-        apply_ui_fonts();
-        update_status();
-        /* queued so the window is fully shown first; a command-line document
-         * replaces the empty new document */
-        if (g_startup_path[0]) {
-            PostMessageW(hwnd, WM_APP_OPEN_STARTUP, 0, 0);
-        } else {
-            PostMessageW(hwnd, WM_COMMAND, IDM_FILE_NEW, 0);
-        }
-        return 0;
-    }
-    case WM_APP_OPEN_STARTUP:
-        open_document(hwnd, g_startup_path);
-        if (!g_doc) {
-            PostMessageW(hwnd, WM_COMMAND, IDM_FILE_NEW, 0); /* could not open: start with a new document */
-        }
-        return 0;
-    case WM_DPICHANGED: {
-        /* moved to a monitor with another scale, or the scale was changed */
-        const RECT *r = (const RECT *)lParam;
-        RECT client;
-        g_dpi = HIWORD(wParam) >= 48 ? HIWORD(wParam) : 96;
-        apply_ui_fonts();
-        SetWindowPos(hwnd, NULL, r->left, r->top, r->right - r->left, r->bottom - r->top, SWP_NOZORDER | SWP_NOACTIVATE);
-        GetClientRect(hwnd, &client);
-        layout_children(client.right, client.bottom);
-        InvalidateRect(hwnd, NULL, TRUE);
-        return 0;
-    }
-    case WM_SIZE:
-        layout_children(LOWORD(lParam), HIWORD(lParam));
-        InvalidateRect(hwnd, NULL, FALSE);
-        return 0;
-    case WM_ERASEBKGND:
-        return 1;
-    case WM_PAINT:
-        paint_document(hwnd);
-        return 0;
-    case WM_MOUSEWHEEL:
-        goto_page(hwnd, g_page_index + (((short)HIWORD(wParam) < 0) ? 1 : -1));
-        return 0;
-    case WM_COMMAND:
-        if(LOWORD(wParam)==ID_TEXT&&HIWORD(wParam)==EN_CHANGE&&!g_loading){g_dirty=1;editor_title();return 0;}
-        if(LOWORD(wParam)==ID_PARALIST&&HIWORD(wParam)==LBN_SELCHANGE){
-            int row=(int)SendMessageW(g_paralist,LB_GETCURSEL,0,0);
-            if(editor_commit()&&row!=LB_ERR)editor_select((size_t)SendMessageW(g_paralist,LB_GETITEMDATA,row,0));
-            return 0;
-        }
-        switch (LOWORD(wParam)) {
-        case IDM_FILE_NEW: editor_new();break;
-        case IDM_FILE_SAVE:
-        case IDM_FILE_SAVE_AS:
-        case IDM_EDIT_MODE:
-            if(g_read_only){MessageBoxW(hwnd,L"배포용 문서입니다. 읽을 수는 있지만 편집하거나 다른 형식으로 저장할 수 없습니다.",L"한글패드",MB_ICONINFORMATION);break;}
-            if(LOWORD(wParam)==IDM_EDIT_MODE)editor_mode(1);else editor_save(LOWORD(wParam)==IDM_FILE_SAVE_AS);
-            break;
-        case IDM_PREVIEW: editor_preview();break;
-        case IDM_ADD_PARA: editor_add();break;
-        case IDM_DELETE_PARA: editor_remove();break;
-        case IDM_UNDO: SendMessageW(g_text,EM_UNDO,0,0);break;
-        case IDM_CUT: SendMessageW(g_text,WM_CUT,0,0);break;
-        case IDM_COPY: SendMessageW(g_text,WM_COPY,0,0);break;
-        case IDM_PASTE: SendMessageW(g_text,WM_PASTE,0,0);break;
-        case IDM_SELECT_ALL: SendMessageW(g_text,EM_SETSEL,0,-1);break;
-        case IDM_FILE_OPEN:
-            file_open(hwnd);
-            break;
-        case IDM_FILE_OPEN_SAMPLE:
-            open_sample(hwnd);
-            break;
-        case IDM_FILE_EXIT:
-            SendMessageW(hwnd,WM_CLOSE,0,0);
-            break;
-        case ID_BTN_PREV:
-            goto_page(hwnd, g_page_index - 1);
-            break;
-        case ID_BTN_NEXT:
-            goto_page(hwnd, g_page_index + 1);
-            break;
-        case IDM_HELP_ABOUT:
-            about(hwnd);
-            break;
-        case IDM_FONT_REPORT:
-            font_report(hwnd);
-            break;
-        }
-        return 0;
-    case WM_KEYDOWN:
-        if (wParam == VK_PRIOR || wParam == VK_LEFT || wParam == VK_UP) {
-            goto_page(hwnd, g_page_index - 1);
-        } else if (wParam == VK_NEXT || wParam == VK_RIGHT || wParam == VK_DOWN || wParam == VK_SPACE) {
-            goto_page(hwnd, g_page_index + 1);
-        }
-        return 0;
-    case WM_CLOSE:
-        if(editor_discard())DestroyWindow(hwnd);return 0;
-    case WM_DESTROY:
-        hp_editor_free(g_editor);g_editor=NULL;
-        free_doc();
-        PostQuitMessage(0);
-        return 0;
-    }
-    return DefWindowProcW(hwnd, msg, wParam, lParam);
-}
+#include "gui_ui.inc"
 
 int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE hPrev, PWSTR cmd, int show) {
     WNDCLASSW wc;
-    MSG msg;
     HRESULT hr;
     (void)hPrev;
     (void)cmd;
@@ -2305,35 +2027,12 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE hPrev, PWSTR cmd, int show) {
         return 1;
     }
     ShowWindow(g_main, show);
-    while (GetMessageW(&msg, NULL, 0, 0) > 0) {
-        if(msg.message==WM_KEYDOWN&&(msg.wParam==VK_F2||msg.wParam==VK_F5)){SendMessageW(g_main,WM_COMMAND,msg.wParam==VK_F2?IDM_EDIT_MODE:IDM_PREVIEW,0);continue;}
-        if (msg.message == WM_KEYDOWN && (GetKeyState(VK_CONTROL) & 0x8000)) {
-            int id=0;
-            if(msg.wParam=='N')id=IDM_FILE_NEW;
-            if(msg.wParam=='S')id=(GetKeyState(VK_SHIFT)&0x8000)?IDM_FILE_SAVE_AS:IDM_FILE_SAVE;
-            if(msg.wParam=='A'&&g_editing)id=IDM_SELECT_ALL;
-            if(msg.wParam==VK_RETURN&&g_editing)id=IDM_ADD_PARA;
-            if(id){SendMessageW(g_main,WM_COMMAND,id,0);continue;}
-            if (msg.wParam == 'O') {
-                file_open(g_main);
-                continue;
-            }
-            if (msg.wParam == '1') {
-                open_sample(g_main);
-                continue;
-            }
-        }
-        if (msg.message == WM_KEYDOWN && !g_editing && msg.hwnd!=g_main) {
-            SendMessageW(g_main, WM_KEYDOWN, msg.wParam, msg.lParam);
-        }
-        TranslateMessage(&msg);
-        DispatchMessageW(&msg);
-    }
+    ui_message_loop();
     if (g_wic) {
         g_wic->lpVtbl->Release(g_wic);
     }
     CoUninitialize();
-    return (int)msg.wParam;
+    return 0;
 }
 
 
