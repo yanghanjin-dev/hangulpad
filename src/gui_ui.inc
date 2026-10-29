@@ -61,6 +61,53 @@
 #define TIMER_PREVIEW 1
 #define RECENT_MAX 8
 
+
+/* Common controls functions are looked up at run time so that they come from the
+ * same comctl32 as the controls: version 6 once enable_visual_styles() has
+ * activated the manifest (a static import would bind version 5 at start-up, and
+ * a version 5 image list does not work with version 6 toolbars). */
+typedef HIMAGELIST(WINAPI *il_create_fn)(int, int, UINT, int, int);
+typedef int(WINAPI *il_add_fn)(HIMAGELIST, HBITMAP, HBITMAP);
+typedef BOOL(WINAPI *il_destroy_fn)(HIMAGELIST);
+typedef BOOL(WINAPI *icc_fn)(const INITCOMMONCONTROLSEX *);
+
+static FARPROC comctl_proc(const char *name) {
+    static HMODULE module;
+    if (!module) {
+        module = LoadLibraryW(L"comctl32.dll");
+    }
+    return module ? GetProcAddress(module, name) : NULL;
+}
+
+static HIMAGELIST cc_imagelist_create(int cx, int cy, UINT flags, int initial, int grow) {
+    il_create_fn f = (il_create_fn)(void (*)(void))comctl_proc("ImageList_Create");
+    return f ? f(cx, cy, flags, initial, grow) : NULL;
+}
+
+static void cc_imagelist_add(HIMAGELIST list, HBITMAP bmp) {
+    il_add_fn f = (il_add_fn)(void (*)(void))comctl_proc("ImageList_Add");
+    if (f && list) {
+        f(list, bmp, NULL);
+    }
+}
+
+static void cc_imagelist_destroy(HIMAGELIST list) {
+    il_destroy_fn f = (il_destroy_fn)(void (*)(void))comctl_proc("ImageList_Destroy");
+    if (f && list) {
+        f(list);
+    }
+}
+
+static void cc_init(void) {
+    INITCOMMONCONTROLSEX icc;
+    icc_fn f = (icc_fn)(void (*)(void))comctl_proc("InitCommonControlsEx");
+    icc.dwSize = sizeof(icc);
+    icc.dwICC = ICC_BAR_CLASSES | ICC_STANDARD_CLASSES | ICC_WIN95_CLASSES;
+    if (f) {
+        f(&icc);
+    }
+}
+
 static HWND g_tb_main, g_tb_fmt, g_cb_style, g_cb_font, g_cb_size, g_cb_spacing, g_cb_zoom;
 static HIMAGELIST g_images;
 static HACCEL g_accel;
@@ -582,7 +629,7 @@ static void draw_icon(HDC dc, int k, int s, const wchar_t *symbol_face) {
 }
 
 static HIMAGELIST build_icons(int s) {
-    HIMAGELIST list = ImageList_Create(s, s, ILC_COLOR32, IC_COUNT, 0);
+    HIMAGELIST list = cc_imagelist_create(s, s, ILC_COLOR32, IC_COUNT, 0);
     const wchar_t *symbols = font_installed(L"Segoe Fluent Icons")  ? L"Segoe Fluent Icons"
                              : font_installed(L"Segoe MDL2 Assets") ? L"Segoe MDL2 Assets"
                                                                     : NULL;
@@ -632,7 +679,7 @@ static HIMAGELIST build_icons(int s) {
             }
         }
         SelectObject(dc, old);
-        ImageList_Add(list, bmp, NULL);
+        cc_imagelist_add(list, bmp);
         DeleteObject(bmp);
     }
     DeleteDC(dc);
@@ -757,7 +804,7 @@ static void toolbars_rebuild(void) {
     toolbar_fill(g_tb_main, TB_MAIN, sizeof(TB_MAIN) / sizeof(TB_MAIN[0]));
     toolbar_fill(g_tb_fmt, TB_FMT, sizeof(TB_FMT) / sizeof(TB_FMT[0]));
     if (old) {
-        ImageList_Destroy(old);
+        cc_imagelist_destroy(old);
     }
 }
 
@@ -3151,10 +3198,7 @@ static void ui_message_loop(void) {
 
 static void ui_create(HWND hwnd) {
     static int registered;
-    INITCOMMONCONTROLSEX icc;
-    icc.dwSize = sizeof(icc);
-    icc.dwICC = ICC_BAR_CLASSES | ICC_STANDARD_CLASSES | ICC_WIN95_CLASSES;
-    InitCommonControlsEx(&icc);
+    cc_init();
     if (!registered) {
         WNDCLASSW wc;
         ZeroMemory(&wc, sizeof(wc));
@@ -3254,8 +3298,13 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
     case WM_SIZE:
         layout_children(LOWORD(lParam), HIWORD(lParam));
         return 0;
-    case WM_ERASEBKGND:
+    case WM_ERASEBKGND: {
+        /* also the background of the transparent (flat) toolbars */
+        RECT r;
+        GetClientRect(hwnd, &r);
+        FillRect((HDC)wParam, &r, GetSysColorBrush(COLOR_BTNFACE));
         return 1;
+    }
     case WM_PAINT: {
         PAINTSTRUCT ps;
         HDC dc = BeginPaint(hwnd, &ps);
@@ -3478,7 +3527,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
         g_tb_main = g_tb_fmt = NULL;
         g_status = NULL;
         if (g_images) {
-            ImageList_Destroy(g_images);
+            cc_imagelist_destroy(g_images);
             g_images = NULL;
         }
         PostQuitMessage(0);
