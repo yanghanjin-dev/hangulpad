@@ -410,6 +410,7 @@ static int layout_saved_para(HDC hdc, const hp_paragraph *para, int left, int ri
 
 static int layout_text_para(HDC hdc, const hp_paragraph *para, int left, int right, int base, int draw, int *ends, int capacity, int *hard, hp_cut_map *ink, int ink_origin);
 static void draw_para(HDC hdc, const hp_paragraph *para, int left, int right, int *y);
+static void draw_block(HDC hdc, const hp_block *b, int left, int right, int *y);
 static int measure_para_height(HDC hdc, const hp_paragraph *para, int content_w) {
     if (!para) return 8;
     if(para->object_anchor_only)return 0;
@@ -786,7 +787,16 @@ retry:
     *flow=trial;return slice;
 }
 
+/* The endnote separator above the first endnote (0.12.1): space above the
+ * line, the line (a third of the width), space below, as 한글's defaults. */
+#define ENDNOTE_ABOVE_HWP 850
+#define ENDNOTE_BELOW_HWP 567
+static int measure_block_content(HDC hdc, const hp_block *b, int content_w);
 static int measure_block_height(HDC hdc, const hp_block *b, int content_w) {
+    return measure_block_content(hdc, b, content_w) +
+           (b && b->note_separator ? hwp_px_i(ENDNOTE_ABOVE_HWP + ENDNOTE_BELOW_HWP) : 0);
+}
+static int measure_block_content(HDC hdc, const hp_block *b, int content_w) {
     if (!b) {
         return 8;
     }
@@ -887,7 +897,7 @@ static int reserve_at(int page) {
 
 static int subtext_height(HDC hdc,const hp_subtext *sub,int width) {
     size_t i;int h=0;
-    for(i=0;i<sub->paragraph_count;i++)h+=measure_para_height(hdc,&sub->paragraphs[i],width);
+    for(i=0;i<sub->block_count;i++)h+=measure_block_height(hdc,&sub->blocks[i],width);
     return h;
 }
 
@@ -935,25 +945,47 @@ static const hp_subtext *page_subtext(int page_index,hp_subtext_kind kind) {
     return found;
 }
 
-/* A header/footer paragraph with its page number fields filled in. */
-static void draw_field_para(HDC hdc,const hp_paragraph *para,int left,int right,int *y,int page_number) {
-    hp_paragraph copy=*para;hp_run *runs=NULL;char numbers[2][16];size_t r;
-    snprintf(numbers[0],sizeof(numbers[0]),"%d",page_number);
-    snprintf(numbers[1],sizeof(numbers[1]),"%d",g_page_count);
-    for(r=0;r<para->run_count;r++)if(para->runs[r].field>=1 && para->runs[r].field<=2)break;
-    if(r<para->run_count && (runs=(hp_run *)malloc(para->run_count*sizeof(*runs)))!=NULL) {
-        memcpy(runs,para->runs,para->run_count*sizeof(*runs));
-        for(r=0;r<para->run_count;r++)if(runs[r].field>=1 && runs[r].field<=2)runs[r].text=numbers[runs[r].field-1];
-        copy.runs=runs;
+/* Page number fields of a header/footer, also inside its tables (0.12.1):
+ * their text points at this page's numbers while it is drawn, then back. */
+typedef struct { char **slot; char *saved; } field_swap;
+typedef struct { field_swap *v; size_t n, cap; char *numbers[2]; } field_set;
+static void fields_in_table(hp_table *t,field_set *fs);
+static void fields_in_para(hp_paragraph *p,field_set *fs) {
+    size_t r;
+    for(r=0;r<p->run_count;r++)if(p->runs[r].field>=1 && p->runs[r].field<=2) {
+        if(fs->n==fs->cap) {
+            size_t cap=fs->cap ? fs->cap*2 : 8;field_swap *g=(field_swap *)realloc(fs->v,cap*sizeof(*g));
+            if(!g)return;
+            fs->v=g;fs->cap=cap;
+        }
+        fs->v[fs->n].slot=&p->runs[r].text;fs->v[fs->n].saved=p->runs[r].text;fs->n++;
+        p->runs[r].text=fs->numbers[p->runs[r].field-1];
     }
-    draw_para(hdc,&copy,left,right,y);
-    free(runs);
+}
+static void fields_in_table(hp_table *t,field_set *fs) {
+    size_t c,k;
+    if(!t)return;
+    for(c=0;c<t->cell_count;c++) {
+        for(k=0;k<t->cells[c].paragraph_count;k++)fields_in_para(&t->cells[c].paragraphs[k],fs);
+        for(k=0;k<t->cells[c].nested_table_count;k++)fields_in_table(t->cells[c].nested_tables[k],fs);
+    }
 }
 
 static void draw_subtext(HDC hdc,const hp_subtext *sub,int left,int right,int top,int area,int page_number) {
     size_t i;int y,h=subtext_height(hdc,sub,right-left);
+    char numbers[2][16];field_set fs={0};
+    snprintf(numbers[0],sizeof(numbers[0]),"%d",page_number);
+    snprintf(numbers[1],sizeof(numbers[1]),"%d",g_page_count);
+    fs.numbers[0]=numbers[0];fs.numbers[1]=numbers[1];
+    for(i=0;i<sub->block_count;i++) {
+        hp_block *b=&sub->blocks[i];
+        if(b->kind==HP_BLOCK_PARAGRAPH)fields_in_para(&b->paragraph,&fs);
+        else if(b->kind==HP_BLOCK_TABLE)fields_in_table(b->table,&fs);
+    }
     y=top+(sub->vert_align==1 ? (area-h)/2 : sub->vert_align==2 ? area-h : 0);
-    for(i=0;i<sub->paragraph_count;i++)draw_field_para(hdc,&sub->paragraphs[i],left,right,&y,page_number);
+    for(i=0;i<sub->block_count;i++)draw_block(hdc,&sub->blocks[i],left,right,&y);
+    for(i=fs.n;i>0;i--)*fs.v[i-1].slot=fs.v[i-1].saved;
+    free(fs.v);
 }
 
 static void draw_page_extras(HDC mem,int page_index,int ml,int mr,int mb,int col_w) {
@@ -993,7 +1025,7 @@ static void draw_page_extras(HDC mem,int page_index,int ml,int mr,int mb,int col
                 y+=hwp_px_i((int32_t)ns->below_hwp);
                 first=0;
             } else y+=hwp_px_i((int32_t)ns->between_hwp);
-            for(i=0;i<note->sub->paragraph_count;i++)draw_para(mem,&note->sub->paragraphs[i],ml,ml+col_w,&y);
+            for(i=0;i<note->sub->block_count;i++)draw_block(mem,&note->sub->blocks[i],ml,ml+col_w,&y);
         }
     }
 }
@@ -1112,12 +1144,16 @@ static void rebuild_pages(HWND hwnd) {
             ends=(int *)calloc((size_t)capacity,sizeof(int));
             hard=(int *)calloc((size_t)capacity,sizeof(int));
             if(!ends || !hard) { free(ends);free(hard);goto failed; }
-            layout_text_para(hdc,para,0,col_w,0,0,ends,capacity,hard,&ink,hwp_px_i(para->space_before_hwp));
+            layout_text_para(hdc,para,0,col_w,0,0,ends,capacity,hard,&ink,hwp_px_i(para->space_before_hwp)+(block->note_separator ? hwp_px_i(ENDNOTE_ABOVE_HWP+ENDNOTE_BELOW_HWP) : 0));
             hp_cut_normalize(&ink);
             if(ink.failed) {free(ends);free(hard);free(ink.bands);goto failed;}
-            for(j=0;j<capacity;j++) {
-                if(ends[j]>0) { ends[j]+=hwp_px_i(para->space_before_hwp);count=j+1; }
-                if(hard[j]>0)hard[j]+=hwp_px_i(para->space_before_hwp);
+            {
+                int lead=hwp_px_i(para->space_before_hwp)+
+                    (block->note_separator ? hwp_px_i(ENDNOTE_ABOVE_HWP+ENDNOTE_BELOW_HWP) : 0);
+                for(j=0;j<capacity;j++) {
+                    if(ends[j]>0) { ends[j]+=lead;count=j+1; }
+                    if(hard[j]>0)hard[j]+=lead;
+                }
             }
         } else if(block->kind==HP_BLOCK_TABLE && block->table) {
             int *columns=NULL,*rows=NULL,total=0;
@@ -1305,6 +1341,12 @@ static void draw_text_underline(HDC dc,double left,double right,int baseline,con
 static double glyph_step(HDC hdc, const hp_run *run, const wchar_t *text, int length,
                       int x, int y, int draw) {
     unsigned code=(unsigned)text[0];
+    if(run->script==1 || run->script==2) {
+        /* superscript / subscript (0.12.1): 60% glyphs at the line's top, or lowered */
+        hp_run small=*run;uint32_t size=run->font_size_hwp ? run->font_size_hwp : 1000;
+        small.script=0;small.font_size_hwp=size*3/5;
+        return glyph_step(hdc,&small,text,length,x,y+(run->script==2 ? hp_line_px(size)*2/5 : 0),draw);
+    }
     if(length==2 && text[0]>=0xd800 && text[0]<=0xdbff && text[1]>=0xdc00 && text[1]<=0xdfff)
         code=0x10000+((text[0]-0xd800)<<10)+(text[1]-0xdc00);
     /* HWP's four boxed section digits have no Unicode font fallback on Windows.
@@ -1656,6 +1698,9 @@ static void draw_image(HDC hdc, const hp_image *img, int left, int right, int *y
         dw = content_w;
     }
     x = left + (content_w - dw) / 2;
+    /* a floating picture's offset is measured from its alignment (0.12.1) */
+    if (img->has_pos && !img->pos.treat_as_char)
+        x = img->pos.horz_align == 1 ? x : img->pos.horz_align == 2 ? right - dw : left;
     yy = *y;
     apply_float_origin(&img->pos, img->has_pos, &x, &yy);
     mem = CreateCompatibleDC(hdc);
@@ -1897,10 +1942,19 @@ static void draw_table(HDC hdc, const hp_table *t, int left, int right, int *y) 
 
 static void draw_block(HDC hdc, const hp_block *b, int left, int right, int *y) {
     int x = left;
-    int yy = *y;
+    int yy;
     if (!b) {
         return;
     }
+    if (b->note_separator) {
+        HPEN old = (HPEN)SelectObject(hdc, GetStockObject(BLACK_PEN));
+        *y += hwp_px_i(ENDNOTE_ABOVE_HWP);
+        MoveToEx(hdc, left, *y, NULL);
+        LineTo(hdc, left + (right - left) / 3, *y);
+        SelectObject(hdc, old);
+        *y += hwp_px_i(ENDNOTE_BELOW_HWP);
+    }
+    yy = *y;
     if (b->kind == HP_BLOCK_PARAGRAPH) {
         draw_para(hdc, &b->paragraph, left, right, y);
     } else if (b->kind == HP_BLOCK_TABLE && b->table) {
@@ -2065,7 +2119,7 @@ static void open_document(HWND hwnd, const wchar_t *path) {
     free(utf8);
     hp_editor_free(g_editor);g_editor=ed;g_edit_index=(size_t)-1;
     wcscpy(g_path,path);g_dirty=0;
-    {char *u=wide_to_utf8(path);g_source_hwp=u?hp_looks_like_hwp(u):0;free(u);}
+    {char *u=wide_to_utf8(path);g_source_hwp=u?(hp_looks_like_hwp(u)||hp_looks_like_hwpml(u)):0;free(u);}
     editor_list(0);
     free_doc();
     g_doc = doc;
@@ -2093,7 +2147,7 @@ static void file_open(HWND hwnd) {
     ofn.hwndOwner = hwnd;
     ofn.lpstrFile = file;
     ofn.nMaxFile = MAX_PATH;
-    ofn.lpstrFilter = L"한글 문서 (*.hwp;*.hwpx)\0*.hwp;*.hwpx\0HWPX 문서 (*.hwpx)\0*.hwpx\0HWP 문서 (*.hwp)\0*.hwp\0모든 파일 (*.*)\0*.*\0";
+    ofn.lpstrFilter = L"한글 문서 (*.hwp;*.hwpx;*.hml)\0*.hwp;*.hwpx;*.hml\0HWPX 문서 (*.hwpx)\0*.hwpx\0HWP 문서 (*.hwp)\0*.hwp\0모든 파일 (*.*)\0*.*\0";
     ofn.nFilterIndex = 1;
     ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_EXPLORER | OFN_NOCHANGEDIR;
     ofn.lpstrDefExt = L"hwpx";

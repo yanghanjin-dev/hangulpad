@@ -173,14 +173,18 @@ static void hp_section_free(hp_section *s) {
     s->paragraph_count = 0;
     for (i = 0; i < s->subtext_count; i++) {
         size_t j;
-        for (j = 0; j < s->subtexts[i].paragraph_count; j++) {
-            hp_paragraph_free(&s->subtexts[i].paragraphs[j]);
+        for (j = 0; j < s->subtexts[i].block_count; j++) {
+            hp_block_free(&s->subtexts[i].blocks[j]);
         }
-        free(s->subtexts[i].paragraphs);
+        free(s->subtexts[i].blocks);
     }
     free(s->subtexts);
     s->subtexts = NULL;
     s->subtext_count = 0;
+}
+
+void hp_section_clear(hp_section *s) {
+    hp_section_free(s);
 }
 
 hp_document *hp_document_new(void) {

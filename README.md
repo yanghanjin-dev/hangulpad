@@ -1,13 +1,15 @@
 # 한글패드 / HangulPad
 
 가볍고 단순한 한글 워드 프로세서를 목표로 하는 오픈소스 프로젝트입니다.  
-C11 문서 엔진과 Windows Win32 문서 보기·편집 UI를 개발하고 있습니다. **HWP 5.x와 HWPX를 모두 엽니다.**
+C11 문서 엔진과 Windows Win32 문서 보기·편집 UI를 개발하고 있습니다. **HWP 5.x, HWPX, HWPML(한/글 XML)을 엽니다.**
 
 A lightweight Korean word processor with a C11 HWP/HWPX engine and a Windows viewer/editor.
 
 > **기본 개발 환경:** Windows PowerShell / MSYS2 UCRT64 / CMake / Ninja.
 
-**현재 버전: 0.12.0** (2026-10-31) — 변경 내역은 [`CHANGELOG.md`](CHANGELOG.md)
+**현재 버전: 0.13.0** (2026-10-31) — 변경 내역은 [`CHANGELOG.md`](CHANGELOG.md)
+
+0.13.0은 **HWPML(한/글 XML, 국가법령정보센터 법령 파일 등)**을 열고, 미주를 문서 끝에, 머리말·꼬리말·각주 안의 표·그림과 위첨자·아래첨자를 표시합니다.
 
 0.12.0은 **머리말·꼬리말**(쪽 번호 필드, 홀짝 쪽 구별), **각주**(본문 번호와 쪽 아래 구분선·내용), **문단 번호·글머리표·개요 번호**를 표시합니다.
 
@@ -67,6 +69,7 @@ HWP 문서를 저장하면 원본은 그대로 두고 새 `.hwpx` 파일로 저�
 | XML parser (`src/xml.c`) | Own dependency-free DOM parser: entities, char refs, CDATA, namespaces (local names), byte spans for lossless patching, depth limit 512, fuzzed |
 | HWPX read/write | Read: paragraphs/styles/tables/images/floats/equations. **Save is lossless** for opened files — every original part is kept byte-for-byte; only changed parts are regenerated (appended paragraphs are inserted into the original section XML, title is patched in `content.hpf`). New documents get a minimal package. |
 | HWP 5.x | **Read** (`src/cfb.c` compound file, `src/hwp.c` records → OWPML parts → HWPX reader; distribution-only docs read-only; password/DRM refused). Write: no — HWP documents are saved as HWPX |
+| HWPML 2.x | **Read** (`src/hwpml.c`: 한/글 XML documents such as 국가법령정보센터 downloads named .hwp → OWPML parts → HWPX reader). Saved as HWPX |
 | CLI (`build/hp`) | `open` / `new` / `save` (also `.hwp` → `.hwpx`) / `append` / `roundtrip` / `probe` / `--version` (UTF-8/Korean paths on Windows) |
 | Desktop UI (Windows) | `HangulPad.exe` engine layout (fonts, tables/nested, images, floats, containers, equations); 0.10.0: classic 한글 menus, two toolbars, status bar, zoom/fit/two-page view, character/paragraph format dialogs, find/replace, print |
 | Full HWP record parse / HWP write | Deferred |
@@ -211,8 +214,6 @@ See [`NOTICE`](NOTICE) for the Hancom HWP / OWPML attribution placeholder requir
 - Binary HWP write (HWP documents are saved as HWPX)
 - Typing directly on the page (0.11.0: click on the page to place the caret, type in the edit box; formats apply to the selected characters)
 - Styles, numbering/bullets, page setup editing, table/picture editing (menus are present, greyed; 0.12.0 shows numbers/bullets, editing them is not yet possible)
-- Endnotes at the end of the document (0.12.0 shows them like footnotes), objects inside headers/footers and notes, superscript note numbers
-- HWPML (한/글 XML, e.g. 국가법령정보센터 downloads)
 
 
 

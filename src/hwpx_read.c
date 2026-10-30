@@ -25,6 +25,7 @@ typedef struct {
     int bold;
     int italic, underline, strikeout;
     int use_font_space;
+    int script; /* 1 superscript, 2 subscript */
     int font_ids[7];
     int width_percent[7];
     int spacing_percent[7];
@@ -59,6 +60,7 @@ typedef struct {
 typedef struct {
     int num_format;
     char prefix[16], suffix[16];
+    int superscript; /* the number in the text is raised (0.12.1) */
 } hp_note_format;
 
 /* Mutable state while reading the sections of one document (0.12.0). */
@@ -66,10 +68,14 @@ typedef struct {
     int (*counters)[10]; /* per numbering id: last number per level, 0 = unused */
     size_t counter_count;
     int outline_id;      /* the section's outlineShapeIDRef */
-    hp_note_format footnote;
+    hp_note_format footnote, endnote;
     int note_count;      /* footnotes so far (numbering is continuous) */
+    int endnote_count;
     int current_note;    /* number of the note whose text is being read, 0 outside */
+    int current_endnote; /* that note is an endnote */
     hp_section *sec;     /* section being read */
+    hp_block *endnotes;  /* endnote contents, shown after the last section (0.12.1) */
+    size_t endnote_block_count;
 } hp_read_state;
 
 typedef struct {
@@ -525,6 +531,7 @@ static void parse_header_styles(const hp_xml_node *root, hp_style_tables *st) {
         cs->bold = hp_xml_find(n, "bold") != NULL;
         cs->use_font_space = attr_l(n,"useFontSpace",0) != 0;
         cs->italic = hp_xml_child(n,"italic") != NULL;
+        cs->script = hp_xml_child(n, "supscript") ? 1 : hp_xml_child(n, "subscript") ? 2 : 0;
         {
             const hp_xml_node *u=hp_xml_child(n,"underline"),*s=hp_xml_child(n,"strikeout");
             const char *ut=hp_xml_attr(u,"type"),*ss=hp_xml_attr(s,"shape"),*sc=hp_xml_attr(s,"color");
@@ -773,6 +780,7 @@ static void apply_char_style(hp_run *run, const hp_style_tables *st, long long c
     run->bold = cs->bold;
     run->use_font_space = cs->use_font_space;
     run->italic=cs->italic;run->underline=cs->underline;run->strikeout=cs->strikeout;
+    run->script = cs->script;
     memcpy(run->width_percent, cs->width_percent, sizeof(run->width_percent));
     memcpy(run->spacing_percent, cs->spacing_percent, sizeof(run->spacing_percent));
     {
@@ -1113,35 +1121,65 @@ static void note_marker(sbuf *b, const hp_note_format *f, int number) {
     sb_putn(b, f->suffix, strlen(f->suffix));
 }
 
-/* Paragraphs of a header, footer or note (<hp:subList>), text only. */
+static hp_status parse_section_paragraph(const hp_xml_node *p, hp_section *sec, const hp_style_tables *st);
+
+/* Free what blocks own (the array itself stays with the caller). */
+static void free_blocks(const hp_block *blocks, size_t count) {
+    hp_section scratch;
+    if (!count) {
+        return;
+    }
+    memset(&scratch, 0, sizeof(scratch));
+    scratch.blocks = (hp_block *)malloc(count * sizeof(*scratch.blocks));
+    if (!scratch.blocks) {
+        return;
+    }
+    memcpy(scratch.blocks, blocks, count * sizeof(*scratch.blocks));
+    scratch.block_count = count;
+    hp_section_clear(&scratch);
+}
+
+/* Contents of a header, footer or note (<hp:subList>): its paragraphs become
+ * blocks as in the body, so tables and pictures in them are shown (0.12.1). */
 static hp_status parse_subtext(const hp_xml_node *el, const hp_style_tables *st, hp_subtext *sub) {
     const hp_xml_node *list = hp_xml_child(el, "subList"), *p;
     const char *va = hp_xml_attr(list, "vertAlign");
+    hp_read_state *rs = st->state;
+    hp_section scratch, *saved = rs ? rs->sec : NULL;
+    hp_status rc = HP_OK;
+    size_t i;
     sub->vert_align = !va ? 0 : !strcmp(va, "CENTER") ? 1 : !strcmp(va, "BOTTOM") ? 2 : 0;
-    for (p = hp_xml_child(list, "p"); p; p = hp_xml_next(p, "p")) {
-        hp_paragraph q, *g;
-        if (parse_cell_paragraph(p, st, &q) != HP_OK) {
-            return HP_ERR_NOMEM;
-        }
-        g = (hp_paragraph *)realloc(sub->paragraphs, (sub->paragraph_count + 1) * sizeof(*g));
-        if (!g) {
-            paragraph_release(&q);
-            return HP_ERR_NOMEM;
-        }
-        sub->paragraphs = g;
-        sub->paragraphs[sub->paragraph_count++] = q;
+    memset(&scratch, 0, sizeof(scratch));
+    if (rs) {
+        rs->sec = &scratch; /* nothing nested in here is kept */
     }
-    return HP_OK;
+    for (p = hp_xml_child(list, "p"); p && rc == HP_OK; p = hp_xml_next(p, "p")) {
+        rc = parse_section_paragraph(p, &scratch, st);
+    }
+    if (rs) {
+        rs->sec = saved;
+    }
+    sub->blocks = scratch.blocks;
+    sub->block_count = scratch.block_count;
+    for (i = 0; i < scratch.paragraph_count; i++) {
+        paragraph_release(&scratch.paragraphs[i]);
+    }
+    free(scratch.paragraphs);
+    scratch.blocks = NULL;
+    scratch.block_count = scratch.paragraph_count = 0;
+    scratch.paragraphs = NULL;
+    hp_section_clear(&scratch);
+    return rc;
 }
 
 static hp_status add_subtext(hp_section *sec, hp_subtext *sub) {
     hp_subtext *g = (hp_subtext *)realloc(sec->subtexts, (sec->subtext_count + 1) * sizeof(*g));
     if (!g) {
-        size_t i;
-        for (i = 0; i < sub->paragraph_count; i++) {
-            paragraph_release(&sub->paragraphs[i]);
-        }
-        free(sub->paragraphs);
+        hp_section scratch;
+        memset(&scratch, 0, sizeof(scratch));
+        scratch.blocks = sub->blocks;
+        scratch.block_count = sub->block_count;
+        hp_section_clear(&scratch);
         return HP_ERR_NOMEM;
     }
     sec->subtexts = g;
@@ -1157,27 +1195,48 @@ static hp_status add_control(hp_paragraph *para, const hp_xml_node *e, const hp_
         return HP_OK;
     }
     if (hp_xml_is(e, "footNote") || hp_xml_is(e, "endNote")) {
+        int end = hp_xml_is(e, "endNote"), *count = end ? &rs->endnote_count : &rs->note_count;
         long long n = attr_l(e, "number", 0);
-        int number = n > 0 && n < 100000 ? (int)n : rs->note_count + 1, saved = rs->current_note;
+        int number = n > 0 && n < 100000 ? (int)n : *count + 1;
+        int saved = rs->current_note, saved_end = rs->current_endnote;
         sbuf b = {0};
         hp_subtext sub;
         hp_status rc;
-        if (number > rs->note_count) {
-            rs->note_count = number;
+        if (number > *count) {
+            *count = number;
         }
-        note_marker(&b, &rs->footnote, number);
+        note_marker(&b, end ? &rs->endnote : &rs->footnote, number);
         rc = add_run(para, sb_finish(&b), st, char_id);
+        if (rc == HP_OK && (end ? rs->endnote : rs->footnote).superscript) {
+            para->runs[para->run_count - 1].script = 1;
+        }
         if (rc != HP_OK || !rs->sec) {
             return rc;
         }
-        /* endnotes are shown as footnotes for now (on the page of the reference) */
         memset(&sub, 0, sizeof(sub));
         sub.kind = HP_SUB_FOOTNOTE;
         sub.block = rs->sec->block_count;
         rs->current_note = number;
+        rs->current_endnote = end;
         rc = parse_subtext(e, st, &sub);
         rs->current_note = saved;
-        return rc == HP_OK ? add_subtext(rs->sec, &sub) : rc;
+        rs->current_endnote = saved_end;
+        if (rc != HP_OK || !end) {
+            return rc == HP_OK ? add_subtext(rs->sec, &sub) : rc;
+        }
+        /* endnotes: collected for the end of the document */
+        if (sub.block_count) {
+            hp_block *g = (hp_block *)realloc(rs->endnotes, (rs->endnote_block_count + sub.block_count) * sizeof(*g));
+            if (!g) {
+                rc = add_subtext(rs->sec, &sub); /* keeps them freed with the section */
+                return rc == HP_OK ? HP_ERR_NOMEM : rc;
+            }
+            memcpy(g + rs->endnote_block_count, sub.blocks, sub.block_count * sizeof(*g));
+            rs->endnotes = g;
+            rs->endnote_block_count += sub.block_count;
+        }
+        free(sub.blocks);
+        return HP_OK;
     }
     if (hp_xml_is(e, "header") || hp_xml_is(e, "footer")) {
         const char *apply = hp_xml_attr(e, "applyPageType");
@@ -1204,7 +1263,7 @@ static hp_status add_control(hp_paragraph *para, const hp_xml_node *e, const hp_
         }
         if (type && (!strcmp(type, "FOOTNOTE") || !strcmp(type, "ENDNOTE")) && rs->current_note > 0) {
             sbuf b = {0};
-            note_marker(&b, &rs->footnote, rs->current_note);
+            note_marker(&b, rs->current_endnote ? &rs->endnote : &rs->footnote, rs->current_note);
             return add_run(para, sb_finish(&b), st, char_id);
         }
     }
@@ -1272,6 +1331,9 @@ static void parse_float_pos(const hp_xml_node *el, hp_float_pos *pos, int *has_p
     }
     if ((rel = hp_xml_attr(p, "horzRelTo")) != NULL) {
         pos->horz_rel_para = strcmp(rel, "PARA") == 0;
+    }
+    if ((rel = hp_xml_attr(p, "horzAlign")) != NULL) {
+        pos->horz_align = !strcmp(rel, "CENTER") ? 1 : !strcmp(rel, "RIGHT") ? 2 : 0;
     }
 }
 
@@ -1951,6 +2013,16 @@ static hp_status parse_section(const hp_xml_node *root, hp_section *sec, const h
                 f->num_format = number_format_code(hp_xml_attr(fmt, "type"));
                 snprintf(f->prefix, sizeof(f->prefix), "%s", pre ? pre : "");
                 snprintf(f->suffix, sizeof(f->suffix), "%s", fmt ? (suf ? suf : "") : ")");
+                f->superscript = attr_l(fmt, "supscript", 0) != 0;
+                {
+                    const hp_xml_node *ef = hp_xml_child(hp_xml_child(pr, "endNotePr"), "autoNumFormat");
+                    const char *epre = hp_xml_attr(ef, "prefixChar"), *esuf = hp_xml_attr(ef, "suffixChar");
+                    hp_note_format *e = &st->state->endnote;
+                    e->num_format = number_format_code(hp_xml_attr(ef, "type"));
+                    snprintf(e->prefix, sizeof(e->prefix), "%s", epre ? epre : "");
+                    snprintf(e->suffix, sizeof(e->suffix), "%s", ef ? (esuf ? esuf : "") : ")");
+                    e->superscript = attr_l(ef, "supscript", 0) != 0;
+                }
             }
         }
     }
@@ -2303,6 +2375,29 @@ hp_status hp_hwpx_read_package(hp_package *pkg, hp_document **out_doc) {
         doc->sections[doc->section_count - 1].loaded_paragraph_count =
             doc->sections[doc->section_count - 1].paragraph_count;
     }
+    if (state.endnote_block_count && doc->section_count) {
+        /* endnotes after the end of the document, below a separator (0.12.1) */
+        hp_section *last = &doc->sections[doc->section_count - 1];
+        size_t k;
+        state.endnotes[0].note_separator = 1;
+        for (k = 0; k < state.endnote_block_count && st == HP_OK; k++) {
+            if (state.endnotes[k].kind == HP_BLOCK_PARAGRAPH) {
+                st = append_flat_para(last, &state.endnotes[k].paragraph);
+            }
+            if (st == HP_OK) {
+                st = append_block(last, &state.endnotes[k]);
+            }
+        }
+        last->loaded_paragraph_count = last->paragraph_count;
+        if (st != HP_OK) {
+            free_blocks(state.endnotes + k, state.endnote_block_count - k); /* the ones not handed over */
+            free(state.endnotes);
+            state.endnotes = NULL;
+            goto fail;
+        }
+        free(state.endnotes);
+        state.endnotes = NULL;
+    }
 
     pkg->loaded_title = hp_strdup(doc->title);
     if (!pkg->loaded_title) {
@@ -2327,6 +2422,8 @@ fail:
     hp_xml_free(xml);
     style_tables_free(&styles);
     free(state.counters);
+    free_blocks(state.endnotes, state.endnote_block_count);
+    free(state.endnotes);
     hp_document_free(doc);
     hp_package_free(pkg);
     return st;

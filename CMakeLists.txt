@@ -12,7 +12,7 @@ find_package(libzip CONFIG REQUIRED)
 find_package(ZLIB REQUIRED) # HWP 5.x streams are raw deflate
 add_library(hangulpad_engine STATIC
     src/common.c src/ir.c src/xml.c src/hwpx_package.c
-    src/hwpx_read.c src/hwpx_write.c src/edit.c src/hwp.c src/cfb.c src/aes128.c)
+    src/hwpx_read.c src/hwpx_write.c src/edit.c src/hwp.c src/hwpml.c src/cfb.c src/aes128.c)
 target_include_directories(hangulpad_engine PUBLIC include)
 target_link_libraries(hangulpad_engine PUBLIC libzip::zip ZLIB::ZLIB)
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")

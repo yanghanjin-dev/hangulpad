@@ -56,6 +56,9 @@ static hp_status open_any(const char *path, hp_document **out) {
     if (hp_looks_like_hwp(path)) {
         return hp_hwp_read(path, out);
     }
+    if (hp_looks_like_hwpml(path)) {
+        return hp_hwpml_read(path, out);
+    }
     if (streq_ci(ext, "hwpx")) {
         return hp_hwpx_read(path, out);
     }
@@ -233,6 +236,8 @@ int main(int argc, char **argv) {
             puts("hwpx");
         } else if (hp_looks_like_hwp(argv[2])) {
             puts("hwp-cfb");
+        } else if (hp_looks_like_hwpml(argv[2])) {
+            puts("hwpml");
         } else {
             puts("unknown");
         }

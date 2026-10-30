@@ -462,10 +462,13 @@ static const char *const LINE_TYPE[] = {"NONE", "SOLID", "DOT", "DASH", "DASH_DO
 static const char *const LINE_WIDTH[] = {"0.1 mm", "0.12 mm", "0.15 mm", "0.2 mm", "0.25 mm", "0.3 mm",
                                          "0.4 mm", "0.5 mm", "0.6 mm", "0.7 mm", "1.0 mm", "1.5 mm",
                                          "2.0 mm", "3.0 mm", "4.0 mm", "5.0 mm"};
-/* char-shape underline / strikeout shapes (BorderType2) */
-static const char *const LINE_TYPE2[] = {"SOLID", "DASH", "DOT", "DASH_DOT", "DASH_DOT_DOT", "LONG_DASH", "CIRCLE",
-                                         "DOUBLE_SLIM", "SLIM_THICK", "THICK_SLIM", "SLIM_THICK_SLIM", "WAVE",
-                                         "DOUBLEWAVE"};
+/* char-shape underline / strikeout shapes (BorderType2). 13-16 are the 3D
+ * shapes: 한글 writes 15 ("3D") as the placeholder of a strikeout that is
+ * off, which PICK must not turn into SOLID (0.12.1). */
+static const char *const LINE_TYPE2[] = {"SOLID",       "DASH",       "DOT",       "DASH_DOT",         "DASH_DOT_DOT",
+                                         "LONG_DASH",   "CIRCLE",     "DOUBLE_SLIM", "SLIM_THICK",     "THICK_SLIM",
+                                         "SLIM_THICK_SLIM", "WAVE",   "DOUBLEWAVE", "THICK_3D",        "THICK_3D_REVERSE",
+                                         "3D",          "3D_REVERSE"};
 static const char *const LANGS[7] = {"HANGUL", "LATIN", "HANJA", "JAPANESE", "OTHER", "SYMBOL", "USER"};
 static const char *const LANG_ATTR[7] = {"hangul", "latin", "hanja", "japanese", "other", "symbol", "user"};
 
@@ -2683,6 +2686,90 @@ int hp_document_is_read_only(const hp_document *doc) {
     return doc && doc->package && doc->package->read_only;
 }
 
+/* UTF-8 text with the XML specials escaped */
+static void x_text(xb *b, const char *s) {
+    for (; *s; s++) {
+        char one[2] = {*s, 0};
+        xs(b, *s == '&' ? "&amp;" : *s == '<' ? "&lt;" : *s == '>' ? "&gt;" : *s == '"' ? "&quot;" : one);
+    }
+}
+
+/* An HWPX package from converted parts, packaged as for HWP documents and read
+ * (used by the HWPML reader, 0.12.1). */
+hp_status hp_owpml_package(const char *title, const char *header_xml, const char *const *sections,
+                           size_t section_count, const hp_owpml_bin *bins, size_t bin_count, hp_document **out_doc) {
+    hp_package *pkg = (hp_package *)calloc(1, sizeof(hp_package));
+    xb b, hpf;
+    size_t i;
+    hp_status st;
+    memset(&b, 0, sizeof(b));
+    memset(&hpf, 0, sizeof(hpf));
+    *out_doc = NULL;
+    if (!pkg) {
+        return HP_ERR_NOMEM;
+    }
+    st = hp_package_add_entry(pkg, "mimetype", HP_HWPX_MIMETYPE, strlen(HP_HWPX_MIMETYPE), 1);
+    if (st == HP_OK) {
+        xs(&b, HP_XML_DECL "<hv:HCFVersion xmlns:hv=\"http://www.hancom.co.kr/hwpml/2011/version\" "
+                           "tagetApplication=\"WORDPROCESSOR\" major=\"5\" minor=\"1\" micro=\"1\" buildNumber=\"0\" "
+                           "os=\"1\" xmlVersion=\"1.5\" application=\"HangulPad\" appVersion=\"" HP_VERSION_COMMAS "\"/>");
+        st = add_text_part(pkg, "version.xml", &b);
+    }
+    if (st == HP_OK) {
+        xs(&b, header_xml);
+        st = add_text_part(pkg, "Contents/header.xml", &b);
+    }
+    xs(&hpf, HP_XML_DECL "<opf:package" HP_NS_ALL " version=\"\" unique-identifier=\"\" id=\"\"><opf:metadata><opf:title>");
+    x_text(&hpf, title ? title : "");
+    xs(&hpf, "</opf:title><opf:language>ko</opf:language></opf:metadata><opf:manifest>"
+             "<opf:item id=\"header\" href=\"Contents/header.xml\" media-type=\"application/xml\"/>");
+    for (i = 0; i < bin_count && st == HP_OK; i++) {
+        char part[64];
+        const char *mt = media_type(bins[i].ext);
+        int stored = strcmp(mt, "image/png") == 0 || strcmp(mt, "image/jpg") == 0 || strcmp(mt, "image/gif") == 0;
+        snprintf(part, sizeof(part), "BinData/image%u.%s", bins[i].id, bins[i].ext);
+        st = hp_package_add_entry(pkg, part, bins[i].data, bins[i].len, stored);
+        xf(&hpf, "<opf:item id=\"image%u\" href=\"%s\" media-type=\"%s\" isEmbeded=\"1\"/>", bins[i].id, part, mt);
+    }
+    for (i = 0; i < section_count && st == HP_OK; i++) {
+        char part[48];
+        snprintf(part, sizeof(part), "Contents/section%u.xml", (unsigned)i);
+        xs(&b, sections[i]);
+        st = add_text_part(pkg, part, &b);
+        xf(&hpf, "<opf:item id=\"section%u\" href=\"%s\" media-type=\"application/xml\"/>", (unsigned)i, part);
+    }
+    xs(&hpf, "</opf:manifest><opf:spine><opf:itemref idref=\"header\" linear=\"yes\"/>");
+    for (i = 0; i < section_count; i++) {
+        xf(&hpf, "<opf:itemref idref=\"section%u\" linear=\"yes\"/>", (unsigned)i);
+    }
+    xs(&hpf, "</opf:spine></opf:package>");
+    if (st == HP_OK) {
+        st = add_text_part(pkg, "Contents/content.hpf", &hpf);
+    }
+    if (st == HP_OK) {
+        xs(&b, HP_XML_DECL "<ocf:container xmlns:ocf=\"urn:oasis:names:tc:opendocument:xmlns:container\" "
+                           "xmlns:hpf=\"http://www.hancom.co.kr/schema/2011/hpf\"><ocf:rootfiles>"
+                           "<ocf:rootfile full-path=\"Contents/content.hpf\" media-type=\"application/hwpml-package+xml\"/>"
+                           "</ocf:rootfiles></ocf:container>");
+        st = add_text_part(pkg, "META-INF/container.xml", &b);
+    }
+    free(b.s);
+    free(hpf.s);
+    if (st != HP_OK) {
+        hp_package_free(pkg);
+        return st;
+    }
+    st = hp_hwpx_read_package(pkg, out_doc); /* takes the package */
+    if (st == HP_OK) {
+        st = add_preview_text(*out_doc);
+        if (st != HP_OK) {
+            hp_document_free(*out_doc);
+            *out_doc = NULL;
+        }
+    }
+    return st;
+}
+
 hp_status hp_document_read(const char *path, hp_document **out_doc) {
     if (out_doc) {
         *out_doc = NULL;
@@ -2692,6 +2779,9 @@ hp_status hp_document_read(const char *path, hp_document **out_doc) {
     }
     if (hp_looks_like_hwp(path)) {
         return hp_hwp_read(path, out_doc);
+    }
+    if (hp_looks_like_hwpml(path)) {
+        return hp_hwpml_read(path, out_doc);
     }
     return hp_hwpx_read(path, out_doc);
 }

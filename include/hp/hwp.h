@@ -22,8 +22,24 @@ hp_status hp_hwp_read(const char *path, hp_document **out_doc);
 hp_status hp_hwp_read_memory(const unsigned char *data, size_t len, hp_document **out_doc);
 /* 1 for a distribution-only document: view it, but do not edit or save it. */
 int hp_document_is_read_only(const hp_document *doc);
-/* Read .hwp or .hwpx, chosen by the file's content (not its name). */
+/* HWPML 2.x (한/글 XML document, often published with a .hwp or .hml name;
+ * 0.12.1): converted to HWPX parts like an HWP document. */
+int hp_looks_like_hwpml(const char *path);
+hp_status hp_hwpml_read(const char *path, hp_document **out_doc);
+hp_status hp_hwpml_read_memory(const unsigned char *data, size_t len, hp_document **out_doc);
+/* Read .hwp, HWPML or .hwpx, chosen by the file's content (not its name). */
 hp_status hp_document_read(const char *path, hp_document **out_doc);
+
+/* Internal: package converted OWPML parts and read them (hwp.c). Pictures
+ * become BinData/image<id>.<ext>, referenced as binaryItemIDRef="image<id>". */
+typedef struct {
+    unsigned id;
+    char ext[8];
+    const unsigned char *data;
+    size_t len;
+} hp_owpml_bin;
+hp_status hp_owpml_package(const char *title, const char *header_xml, const char *const *sections,
+                           size_t section_count, const hp_owpml_bin *bins, size_t bin_count, hp_document **out_doc);
 hp_status hp_hwp_write(const hp_document *doc, const char *path);
 
 #ifdef __cplusplus

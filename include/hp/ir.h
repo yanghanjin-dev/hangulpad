@@ -39,6 +39,7 @@ typedef struct hp_float_pos {
     hp_text_wrap wrap;
     int vert_rel_para;     /* 1=PARA, 0=PAGE/PAPER */
     int horz_rel_para;
+    int horz_align;        /* the offset is from 0 left, 1 center, 2 right (0.12.1) */
 } hp_float_pos;
 
 typedef struct hp_run {
@@ -62,6 +63,7 @@ typedef struct hp_run {
     /* HANGUL, LATIN, HANJA, JAPANESE, OTHER, SYMBOL, USER; zero ratio = 100%. */
     int width_percent[7];
     int spacing_percent[7];
+    int script; /* 1 superscript, 2 subscript (0.12.1) */
 } hp_run;
 
 /* One line from hp:lineseg (Hangul-saved layout hint). */
@@ -197,6 +199,7 @@ typedef struct hp_block {
     uint32_t saved_y_hwp; /* position of the source paragraph's first line */
     int page_number_reset; /* newNum PAGE: affects the page containing this block */
     int hide_page_number; /* pageHiding: this page only */
+    int note_separator; /* first endnote block: separator line above it (0.12.1) */
     hp_paragraph paragraph;
     hp_table *table;
     hp_image *image;
@@ -227,8 +230,8 @@ typedef struct hp_subtext {
     int apply;      /* header/footer: 0 every page, 1 even pages, 2 odd pages */
     int vert_align; /* 0 top, 1 center, 2 bottom */
     size_t block;   /* section block the control belongs to: applies from its page */
-    hp_paragraph *paragraphs;
-    size_t paragraph_count;
+    struct hp_block *blocks; /* paragraphs, tables, pictures… as in the body (0.12.1) */
+    size_t block_count;
 } hp_subtext;
 
 /* Footnote separator and spacing (secPr footNotePr), HWPUNIT. */
@@ -283,6 +286,8 @@ void hp_page_default(hp_page *page);
 hp_document *hp_document_new(void);
 hp_document *hp_document_from_text(const char *text);
 void hp_document_free(hp_document *doc);
+/* Free what a section owns (blocks, paragraphs, headers/footers/notes). */
+void hp_section_clear(hp_section *section);
 
 hp_status hp_document_set_title(hp_document *doc, const char *title);
 hp_status hp_section_add_paragraph_text(hp_section *sec, const char *text);

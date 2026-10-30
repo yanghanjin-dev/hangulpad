@@ -320,10 +320,18 @@ static void test_subtexts(void) {
         "<hp:secPr id=\"\" outlineShapeIDRef=\"1\"><hp:pagePr landscape=\"WIDELY\" width=\"59528\" height=\"84186\">"
         "<hp:margin header=\"4252\" footer=\"4252\" gutter=\"0\" left=\"8504\" right=\"8504\" top=\"5668\" bottom=\"4252\"/>"
         "</hp:pagePr><hp:footNotePr><hp:autoNumFormat type=\"DIGIT\" userChar=\"\" prefixChar=\"\" suffixChar=\")\" "
-        "supscript=\"0\"/><hp:noteLine length=\"-1\" type=\"SOLID\" width=\"0.12 mm\" color=\"#000000\"/>"
-        "<hp:noteSpacing betweenNotes=\"283\" belowLine=\"567\" aboveLine=\"850\"/></hp:footNotePr></hp:secPr>"
+        "supscript=\"1\"/><hp:noteLine length=\"-1\" type=\"SOLID\" width=\"0.12 mm\" color=\"#000000\"/>"
+        "<hp:noteSpacing betweenNotes=\"283\" belowLine=\"567\" aboveLine=\"850\"/></hp:footNotePr>"
+        "<hp:endNotePr><hp:autoNumFormat type=\"ROMAN_SMALL\" userChar=\"\" prefixChar=\"\" suffixChar=\")\" "
+        "supscript=\"0\"/></hp:endNotePr></hp:secPr>"
         "<hp:ctrl><hp:header id=\"1\" applyPageType=\"BOTH\"><hp:subList id=\"\" vertAlign=\"BOTTOM\">"
         "<hp:p id=\"0\" paraPrIDRef=\"0\" styleIDRef=\"0\"><hp:run charPrIDRef=\"0\"><hp:t>머리말 시험</hp:t></hp:run></hp:p>"
+        "<hp:p id=\"0\" paraPrIDRef=\"0\" styleIDRef=\"0\"><hp:run charPrIDRef=\"0\"><hp:tbl id=\"9\" rowCnt=\"1\" "
+        "colCnt=\"1\" cellSpacing=\"0\" borderFillIDRef=\"3\"><hp:sz width=\"20000\" height=\"1500\"/>"
+        "<hp:pos treatAsChar=\"1\"/><hp:tr><hp:tc borderFillIDRef=\"3\"><hp:subList id=\"\">"
+        "<hp:p id=\"0\" paraPrIDRef=\"0\" styleIDRef=\"0\"><hp:run charPrIDRef=\"0\"><hp:t>머리 표</hp:t></hp:run></hp:p>"
+        "</hp:subList><hp:cellAddr colAddr=\"0\" rowAddr=\"0\"/><hp:cellSpan colSpan=\"1\" rowSpan=\"1\"/>"
+        "<hp:cellSz width=\"20000\" height=\"1500\"/></hp:tc></hp:tr></hp:tbl></hp:run></hp:p>"
         "</hp:subList></hp:header></hp:ctrl>"
         "<hp:ctrl><hp:footer id=\"2\" applyPageType=\"ODD\"><hp:subList id=\"\" vertAlign=\"TOP\">"
         "<hp:p id=\"0\" paraPrIDRef=\"0\" styleIDRef=\"0\"><hp:run charPrIDRef=\"0\"><hp:t>- </hp:t>"
@@ -337,6 +345,11 @@ static void test_subtexts(void) {
         "<hp:p id=\"0\" paraPrIDRef=\"0\" styleIDRef=\"0\"><hp:run charPrIDRef=\"0\">"
         "<hp:ctrl><hp:autoNum num=\"1\" numType=\"FOOTNOTE\"/></hp:ctrl><hp:t> 각주 내용</hp:t></hp:run></hp:p>"
         "</hp:subList></hp:footNote></hp:ctrl><hp:t> 있는 문단</hp:t></hp:run></hp:p>"
+        "<hp:p id=\"0\" paraPrIDRef=\"0\" styleIDRef=\"0\"><hp:run charPrIDRef=\"0\"><hp:t>미주가</hp:t>"
+        "<hp:ctrl><hp:endNote number=\"1\" instId=\"2\"><hp:subList id=\"\" vertAlign=\"TOP\">"
+        "<hp:p id=\"0\" paraPrIDRef=\"0\" styleIDRef=\"0\"><hp:run charPrIDRef=\"0\">"
+        "<hp:ctrl><hp:autoNum num=\"1\" numType=\"ENDNOTE\"/></hp:ctrl><hp:t> 미주 내용</hp:t></hp:run></hp:p>"
+        "</hp:subList></hp:endNote></hp:ctrl><hp:t> 있는 문단</hp:t></hp:run></hp:p>"
         "<hp:p id=\"0\" paraPrIDRef=\"0\" styleIDRef=\"0\"><hp:run charPrIDRef=\"0\"><hp:t>가나다</hp:t>"
         "<hp:ctrl><hp:fieldBegin id=\"7\" type=\"CLICK_HERE\" name=\"x\"/></hp:ctrl><hp:t>라마</hp:t>"
         "<hp:ctrl><hp:fieldEnd beginIDRef=\"7\"/></hp:ctrl><hp:t>바사<hp:tab width=\"4000\" leader=\"0\" type=\"1\"/>"
@@ -378,29 +391,111 @@ static void test_subtexts(void) {
     EXPECT(sec->subtext_count == 3, "subtexts: header, footer and footnote");
     if (sec->subtext_count == 3) {
         const hp_subtext *h = &sec->subtexts[0], *f = &sec->subtexts[1], *n = &sec->subtexts[2];
-        EXPECT(h->kind == HP_SUB_HEADER && h->vert_align == 2 && h->apply == 0 && h->paragraph_count == 1 &&
-                   !strcmp(h->paragraphs[0].runs[0].text, "머리말 시험"),
-               "subtexts: header text, bottom aligned");
-        EXPECT(f->kind == HP_SUB_FOOTER && f->apply == 2 && f->paragraph_count == 1 &&
-                   f->paragraphs[0].run_count == 3 && f->paragraphs[0].runs[1].field == 1,
+        EXPECT(h->kind == HP_SUB_HEADER && h->vert_align == 2 && h->apply == 0 && h->block_count == 2 && h->blocks[1].kind == HP_BLOCK_TABLE &&
+                   !strcmp(h->blocks[0].paragraph.runs[0].text, "머리말 시험"),
+               "subtexts: header text and table, bottom aligned");
+        EXPECT(f->kind == HP_SUB_FOOTER && f->apply == 2 && f->block_count == 1 &&
+                   f->blocks[0].paragraph.run_count == 3 && f->blocks[0].paragraph.runs[1].field == 1,
                "subtexts: odd-page footer with a page number field");
-        EXPECT(n->kind == HP_SUB_FOOTNOTE && n->block == 4 && n->paragraph_count == 1 &&
-                   !strcmp(n->paragraphs[0].runs[0].text, "1)"),
+        EXPECT(n->kind == HP_SUB_FOOTNOTE && n->block == 4 && n->block_count == 1 &&
+                   !strcmp(n->blocks[0].paragraph.runs[0].text, "1)"),
                "subtexts: footnote numbered 1) in its text, anchored to its paragraph");
     }
-    EXPECT(sec->block_count == 6, "subtexts: body blocks");
-    if (sec->block_count == 6) {
+    EXPECT(sec->block_count == 7, "subtexts: body blocks");
+    if (sec->block_count == 7) {
         const hp_paragraph *a = &sec->blocks[1].paragraph, *b = &sec->blocks[2].paragraph,
                            *c = &sec->blocks[3].paragraph, *fn = &sec->blocks[4].paragraph,
-                           *fl = &sec->blocks[5].paragraph;
+                           *en = &sec->blocks[5].paragraph, *fl = &sec->blocks[6].paragraph;
+        const hp_section *last = &d->sections[d->section_count - 1];
+        const hp_block *note = last->block_count ? &last->blocks[last->block_count - 1] : NULL;
+        EXPECT(en->run_count == 3 && !strcmp(en->runs[1].text, "i)"), "endnote: reference number (own format)");
+        EXPECT(note && note->note_separator && note->kind == HP_BLOCK_PARAGRAPH &&
+                   !strcmp(note->paragraph.runs[0].text, "i)") && !strcmp(note->paragraph.runs[1].text, " 미주 내용"),
+               "endnote: text after the last section, below a separator");
         EXPECT(!strcmp(a->runs[0].text, "1. ") && a->generated_prefix == 3, "numbers: 1.");
         EXPECT(!strcmp(b->runs[0].text, "1.1. ") && b->generated_prefix == 5, "numbers: 1.1.");
         EXPECT(!strcmp(c->runs[0].text, "2. "), "numbers: 2. (next at level 1)");
-        EXPECT(fn->run_count == 3 && !strcmp(fn->runs[1].text, "1)"), "footnote: reference number in the text");
+        EXPECT(fn->run_count == 3 && !strcmp(fn->runs[1].text, "1)") && fn->runs[1].script == 1 && en->runs[1].script == 0,
+               "footnote: reference number in the text, superscript as its format says");
         /* 가나다[8]라마[8]바사[tab 8]자: saved 21 -> 5 (바), 31 -> 8 (자) */
         EXPECT(fl->seg_count == 3 && fl->segs[1].textpos == 5 && fl->segs[2].textpos == 8,
                "saved lines: controls and tabs count 8 units");
     }
+    hp_document_free(d);
+}
+
+/* 0.12.1: HWPML 2.x (한글 XML, e.g. 국가법령정보센터 downloads named .hwp) */
+static void test_hwpml(void) {
+    static const char doc[] =
+        "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<!DOCTYPE HWPML [\n\t<!ENTITY nbsp\t\"&#160;\">\n]>\n"
+        "<HWPML Version=\"2.1\"><HEAD SecCnt=\"1\"><DOCSUMMARY><TITLE>법 &amp; 시험</TITLE></DOCSUMMARY>"
+        "<MAPPINGTABLE><BINDATALIST Count=\"1\"><BINITEM Type=\"Embedding\" BinData=\"1\" Format=\"png\"/></BINDATALIST>"
+        "<FACENAMELIST><FONTFACE Lang=\"Hangul\" Count=\"1\"><FONT Id=\"0\" Type=\"ttf\" Name=\"굴림\"/></FONTFACE>"
+        "</FACENAMELIST><BORDERFILLLIST Count=\"1\"><BORDERFILL Id=\"1\" ThreeD=\"false\" Shadow=\"false\">"
+        "<LEFTBORDER Type=\"Solid\" Width=\"0.12mm\" Color=\"0\"/><RIGHTBORDER Type=\"None\" Width=\"0.1mm\" Color=\"0\"/>"
+        "<TOPBORDER Type=\"None\" Width=\"0.1mm\" Color=\"0\"/><BOTTOMBORDER Type=\"None\" Width=\"0.1mm\" Color=\"0\"/>"
+        "<FILLBRUSH><WINDOWBRUSH FaceColor=\"255\" HatchColor=\"0\" Alpha=\"0\"/></FILLBRUSH></BORDERFILL></BORDERFILLLIST>"
+        "<CHARSHAPELIST Count=\"2\"><CHARSHAPE Id=\"0\" Height=\"1000\" TextColor=\"0\" ShadeColor=\"4294967295\">"
+        "<FONTID Hangul=\"0\" Latin=\"0\" Hanja=\"0\" Japanese=\"0\" Other=\"0\" Symbol=\"0\" User=\"0\"/></CHARSHAPE>"
+        "<CHARSHAPE Id=\"1\" Height=\"1200\" TextColor=\"255\" ShadeColor=\"4294967295\"><FONTID Hangul=\"0\" Latin=\"0\" "
+        "Hanja=\"0\" Japanese=\"0\" Other=\"0\" Symbol=\"0\" User=\"0\"/><BOLD/></CHARSHAPE></CHARSHAPELIST>"
+        "<PARASHAPELIST Count=\"1\"><PARASHAPE Id=\"0\" Align=\"Justify\" HeadingType=\"None\" Heading=\"0\" Level=\"0\">"
+        "<PARAMARGIN Indent=\"-2620\" Left=\"4000\" Right=\"0\" Prev=\"0\" Next=\"0\" LineSpacingType=\"Percent\" "
+        "LineSpacing=\"130\"/></PARASHAPE></PARASHAPELIST></MAPPINGTABLE></HEAD>"
+        "<BODY><SECTION Id=\"0\"><P ParaShape=\"0\"><TEXT CharShape=\"0\"><SECDEF OutlineShape=\"1\">"
+        "<PAGEDEF Landscape=\"0\" Width=\"59528\" Height=\"84188\" GutterType=\"LeftOnly\"><PAGEMARGIN Left=\"4252\" "
+        "Right=\"4252\" Top=\"5669\" Bottom=\"4252\" Header=\"3600\" Footer=\"3600\" Gutter=\"0\"/></PAGEDEF>"
+        "<FOOTNOTESHAPE><AUTONUMFORMAT Type=\"Digit\" SuffixChar=\")\" Superscript=\"false\"/>"
+        "<NOTELINE Length=\"5cm\" Type=\"Solid\" Width=\"0.12mm\" Color=\"0\"/></FOOTNOTESHAPE></SECDEF>"
+        "<FOOTER ApplyPageType=\"Both\"><PARALIST VertAlign=\"Bottom\"><P ParaShape=\"0\"><TEXT CharShape=\"0\">"
+        "<CHAR>- </CHAR><AUTONUM Number=\"1\" NumberType=\"Page\"/><CHAR> / </CHAR>"
+        "<AUTONUM Number=\"1\" NumberType=\"TotalPage\"/></TEXT></P></PARALIST></FOOTER>"
+        "<CHAR>제1조(목적)&nbsp;이 법은</CHAR></TEXT><TEXT CharShape=\"1\"><CHAR>굵게</CHAR>"
+        "<FOOTNOTE><PARALIST><P ParaShape=\"0\"><TEXT CharShape=\"0\"><AUTONUM Number=\"1\" NumberType=\"Footnote\"/>"
+        "<CHAR> 각주</CHAR></TEXT></P></PARALIST></FOOTNOTE></TEXT></P>"
+        "<P ParaShape=\"0\"><TEXT CharShape=\"0\"><TABLE RowCount=\"1\" ColCount=\"1\" CellSpacing=\"0\" BorderFill=\"1\">"
+        "<SHAPEOBJECT InstId=\"5\" ZOrder=\"0\" NumberingType=\"Table\"><SIZE Width=\"20000\" Height=\"1500\"/>"
+        "<POSITION TreatAsChar=\"true\" VertRelTo=\"Para\" HorzRelTo=\"Para\"/></SHAPEOBJECT><ROW><CELL ColAddr=\"0\" "
+        "RowAddr=\"0\" ColSpan=\"1\" RowSpan=\"1\" Width=\"20000\" Height=\"1500\" BorderFill=\"1\"><PARALIST>"
+        "<P ParaShape=\"0\"><TEXT CharShape=\"0\"><CHAR>셀</CHAR></TEXT></P></PARALIST></CELL></ROW></TABLE></TEXT></P>"
+        "<P ParaShape=\"0\"><TEXT CharShape=\"0\"><PICTURE><SHAPEOBJECT InstId=\"6\" ZOrder=\"1\" NumberingType=\"Figure\" "
+        "TextWrap=\"TopAndBottom\"><SIZE Width=\"2834\" Height=\"2834\"/><POSITION TreatAsChar=\"true\"/></SHAPEOBJECT>"
+        "<SHAPECOMPONENT OriWidth=\"2834\" OriHeight=\"2834\" CurWidth=\"2834\" CurHeight=\"2834\"/>"
+        "<IMAGE Bright=\"0\" Contrast=\"0\" Effect=\"RealPic\" BinItem=\"1\"/></PICTURE></TEXT></P></SECTION></BODY>"
+        "<TAIL><BINDATASTORAGE><BINDATA Size=\"16\" Encoding=\"Base64\" Id=\"1\">iVBORw0KGgoAAAANSUhEUg==</BINDATA>"
+        "</BINDATASTORAGE></TAIL></HWPML>";
+    hp_document *d = NULL;
+    const hp_section *sec;
+    EXPECT(hp_hwpml_read_memory((const unsigned char *)doc, strlen(doc), &d) == HP_OK && d, "hwpml: read");
+    if (!d) {
+        return;
+    }
+    EXPECT(d->title && !strcmp(d->title, "법 & 시험"), "hwpml: title");
+    sec = &d->sections[0];
+    EXPECT(sec->page.margin_top == 5669 && sec->page.footer_height == 3600, "hwpml: page definition");
+    EXPECT(sec->block_count == 3, "hwpml: paragraph, table, picture");
+    if (sec->block_count == 3) {
+        const hp_paragraph *p = &sec->blocks[0].paragraph;
+        EXPECT(p->run_count == 3 && !strcmp(p->runs[0].text, "제1조(목적)\xC2\xA0이 법은") && p->runs[1].bold &&
+                   p->runs[1].font_size_hwp == 1200 && p->runs[1].color_rgb == 0xFF0000 && !strcmp(p->runs[2].text, "1)"),
+               "hwpml: text, &nbsp;, character shapes, footnote number");
+        EXPECT(p->indent_first_hwp == -1310 && p->indent_left_hwp == 2000 && p->line_spacing_percent == 130,
+               "hwpml: paragraph margins are doubled HWPUNITs");
+        EXPECT(sec->blocks[1].kind == HP_BLOCK_TABLE && sec->blocks[1].table &&
+                   !strcmp(sec->blocks[1].table->cells[0].paragraphs[0].runs[0].text, "셀"),
+               "hwpml: table");
+        EXPECT(sec->blocks[2].kind == HP_BLOCK_IMAGE && sec->blocks[2].image && sec->blocks[2].image->data_len == 16 &&
+                   !memcmp(sec->blocks[2].image->data, "\x89PNG", 4),
+               "hwpml: Base64 picture");
+    }
+    EXPECT(sec->subtext_count == 2 && sec->subtexts[0].kind == HP_SUB_FOOTER && sec->subtexts[1].kind == HP_SUB_FOOTNOTE,
+           "hwpml: footer and footnote");
+    if (sec->subtext_count == 2) {
+        const hp_paragraph *f = &sec->subtexts[0].blocks[0].paragraph;
+        EXPECT(sec->subtexts[0].vert_align == 2 && f->run_count == 4 && f->runs[1].field == 1 && f->runs[3].field == 2,
+               "hwpml: footer page number and total pages");
+    }
+    EXPECT(sec->footnote_shape.line_length_hwp == 14173, "hwpml: separator length in cm");
     hp_document_free(d);
 }
 
@@ -486,6 +581,7 @@ int main(int argc, char **argv) {
     test_editor_on_hwp();
     test_converted_details();
     test_subtexts();
+    test_hwpml();
     test_refused_and_damaged();
     if (failures) {
         fprintf(stderr, "%d hwp test(s) failed\n", failures);

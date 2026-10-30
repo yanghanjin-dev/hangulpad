@@ -8,7 +8,7 @@ PREFIX ?= /usr/local
 # Version comes from include/hp/version.h (single source of truth).
 VERSION := $(shell sed -n 's/^#define HP_VERSION_STRING "\(.*\)"/\1/p' include/hp/version.h)
 
-LIB_SRCS := src/common.c src/ir.c src/xml.c src/hwpx_package.c src/hwpx_read.c src/hwpx_write.c src/edit.c src/hwp.c src/cfb.c src/aes128.c
+LIB_SRCS := src/common.c src/ir.c src/xml.c src/hwpx_package.c src/hwpx_read.c src/hwpx_write.c src/edit.c src/hwp.c src/hwpml.c src/cfb.c src/aes128.c
 LIB_OBJS := $(LIB_SRCS:src/%.c=build/%.o)
 
 .PHONY: fuzz golden-check golden-update irdump version all clean test cli check release release-windows release-windows-portable release-source install uninstall dist
