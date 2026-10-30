@@ -49,16 +49,17 @@ static int streq_ci(const char *a, const char *b) {
 
 static hp_status open_any(const char *path, hp_document **out) {
     const char *ext = file_ext(path);
-    if (streq_ci(ext, "hwpx")) {
-        return hp_hwpx_read(path, out);
-    }
-    if (streq_ci(ext, "hwp")) {
-        return hp_hwp_read(path, out);
-    }
+    /* content first: HWPX packages are also published with a .hwp name */
     if (hp_looks_like_hwpx(path)) {
         return hp_hwpx_read(path, out);
     }
     if (hp_looks_like_hwp(path)) {
+        return hp_hwp_read(path, out);
+    }
+    if (streq_ci(ext, "hwpx")) {
+        return hp_hwpx_read(path, out);
+    }
+    if (streq_ci(ext, "hwp")) {
         return hp_hwp_read(path, out);
     }
     return HP_ERR_INVALID;

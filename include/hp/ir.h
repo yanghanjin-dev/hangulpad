@@ -54,6 +54,9 @@ typedef struct hp_run {
     uint32_t tab_width_hwp; /* a dedicated tab run retains its saved advance */
     int tab_leader;
     int tab_align_right;
+    /* Header/footer fields (0.12.0): 1 = current page number, 2 = total pages;
+     * text holds a placeholder that the layout replaces per page. */
+    int field;
     /* Original per-script faces; font_face remains the default/Hangul face. */
     char script_faces[7][256];
     /* HANGUL, LATIN, HANJA, JAPANESE, OTHER, SYMBOL, USER; zero ratio = 100%. */
@@ -87,6 +90,9 @@ typedef struct hp_paragraph {
     int object_anchor_only; /* blank text on a separately rendered object line */
     uint32_t mark_size_hwp; /* character size of the paragraph mark of a paragraph without runs (0 = unknown) */
     uint32_t source_p; /* 1 + index of the source <p> in its section, document order (0 = unknown); 0.11.0 */
+    /* Characters at the start that are not in the source text: the paragraph
+     * number / bullet (0.12.0). Editor offsets skip them. */
+    uint32_t generated_prefix;
     hp_line_seg *segs;
     size_t seg_count;
 } hp_paragraph;
@@ -209,6 +215,30 @@ typedef struct hp_page {
     uint32_t footer_height;
 } hp_page;
 
+/* Text kept outside the body flow (0.12.0): headers and footers, footnotes. */
+typedef enum hp_subtext_kind {
+    HP_SUB_HEADER = 0,
+    HP_SUB_FOOTER = 1,
+    HP_SUB_FOOTNOTE = 2
+} hp_subtext_kind;
+
+typedef struct hp_subtext {
+    hp_subtext_kind kind;
+    int apply;      /* header/footer: 0 every page, 1 even pages, 2 odd pages */
+    int vert_align; /* 0 top, 1 center, 2 bottom */
+    size_t block;   /* section block the control belongs to: applies from its page */
+    hp_paragraph *paragraphs;
+    size_t paragraph_count;
+} hp_subtext;
+
+/* Footnote separator and spacing (secPr footNotePr), HWPUNIT. */
+typedef struct hp_note_shape {
+    int32_t line_length_hwp; /* -1: a third of the column */
+    int line_type;           /* 0 none, 1 solid */
+    uint32_t line_color;
+    uint32_t above_hwp, below_hwp, between_hwp;
+} hp_note_shape;
+
 typedef struct hp_section {
     hp_page page;
     int page_number_start; /* 0 continues from the preceding section */
@@ -223,6 +253,10 @@ typedef struct hp_section {
     size_t block_count;
     hp_paragraph *paragraphs;
     size_t paragraph_count;
+    /* headers, footers and footnotes in document order (0.12.0) */
+    hp_subtext *subtexts;
+    size_t subtext_count;
+    hp_note_shape footnote_shape;
     /* Edit tracking for lossless save (documents read from a file):
      * - paragraphs[loaded_paragraph_count..] were added after reading; they are
      *   inserted at the end of the original section XML, everything else is kept.

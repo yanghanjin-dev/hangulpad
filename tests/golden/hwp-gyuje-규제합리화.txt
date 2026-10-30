@@ -3,7 +3,7 @@ section 0 page=59528x84186 margin l=5669 r=5669 t=2834 b=2834 cols=1 gap=0 block
   para align=1 indent l=0 r=0 first=0 space before=0 after=0 line=160%
     object-anchor-only=1
     seg textpos=0 vpos=0 vsize=1500 th=1500 sp=4294965796 hpos=0 hsize=48190
-    seg textpos=25 vpos=0 vsize=4600 th=4600 sp=4294966996 hpos=0 hsize=48190
+    seg textpos=1 vpos=0 vsize=4600 th=4600 sp=4294966996 hpos=0 hsize=48190
     run " " font="휴먼명조" size=1500 color=000000 bold=0
       metrics width=95,95,95,95,95,95,95 spacing=0,0,0,0,0,0,0
   table rows=1 cols=3 w=47695 h=4030 cells=3

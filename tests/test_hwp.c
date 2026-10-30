@@ -308,6 +308,102 @@ static void test_converted_details(void) {
     hp_document_free(doc);
 }
 
+/* 0.12.0: headers/footers with page number fields, footnotes, paragraph
+ * numbers, and saved line positions that count controls as 8 units. The
+ * section is replaced in a copy of ethics.hwpx (its header has numbering 1). */
+static void test_subtexts(void) {
+    static const char section[] =
+        "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\" ?>"
+        "<hs:sec xmlns:hp=\"http://www.hancom.co.kr/hwpml/2011/paragraph\" "
+        "xmlns:hs=\"http://www.hancom.co.kr/hwpml/2011/section\">"
+        "<hp:p id=\"0\" paraPrIDRef=\"0\" styleIDRef=\"0\"><hp:run charPrIDRef=\"0\">"
+        "<hp:secPr id=\"\" outlineShapeIDRef=\"1\"><hp:pagePr landscape=\"WIDELY\" width=\"59528\" height=\"84186\">"
+        "<hp:margin header=\"4252\" footer=\"4252\" gutter=\"0\" left=\"8504\" right=\"8504\" top=\"5668\" bottom=\"4252\"/>"
+        "</hp:pagePr><hp:footNotePr><hp:autoNumFormat type=\"DIGIT\" userChar=\"\" prefixChar=\"\" suffixChar=\")\" "
+        "supscript=\"0\"/><hp:noteLine length=\"-1\" type=\"SOLID\" width=\"0.12 mm\" color=\"#000000\"/>"
+        "<hp:noteSpacing betweenNotes=\"283\" belowLine=\"567\" aboveLine=\"850\"/></hp:footNotePr></hp:secPr>"
+        "<hp:ctrl><hp:header id=\"1\" applyPageType=\"BOTH\"><hp:subList id=\"\" vertAlign=\"BOTTOM\">"
+        "<hp:p id=\"0\" paraPrIDRef=\"0\" styleIDRef=\"0\"><hp:run charPrIDRef=\"0\"><hp:t>머리말 시험</hp:t></hp:run></hp:p>"
+        "</hp:subList></hp:header></hp:ctrl>"
+        "<hp:ctrl><hp:footer id=\"2\" applyPageType=\"ODD\"><hp:subList id=\"\" vertAlign=\"TOP\">"
+        "<hp:p id=\"0\" paraPrIDRef=\"0\" styleIDRef=\"0\"><hp:run charPrIDRef=\"0\"><hp:t>- </hp:t>"
+        "<hp:ctrl><hp:autoNum num=\"1\" numType=\"PAGE\"/></hp:ctrl><hp:t> -</hp:t></hp:run></hp:p>"
+        "</hp:subList></hp:footer></hp:ctrl><hp:t>본문</hp:t></hp:run></hp:p>"
+        "<hp:p id=\"0\" paraPrIDRef=\"35\" styleIDRef=\"0\"><hp:run charPrIDRef=\"0\"><hp:t>첫째</hp:t></hp:run></hp:p>"
+        "<hp:p id=\"0\" paraPrIDRef=\"36\" styleIDRef=\"0\"><hp:run charPrIDRef=\"0\"><hp:t>아래</hp:t></hp:run></hp:p>"
+        "<hp:p id=\"0\" paraPrIDRef=\"35\" styleIDRef=\"0\"><hp:run charPrIDRef=\"0\"><hp:t>둘째</hp:t></hp:run></hp:p>"
+        "<hp:p id=\"0\" paraPrIDRef=\"0\" styleIDRef=\"0\"><hp:run charPrIDRef=\"0\"><hp:t>각주가</hp:t>"
+        "<hp:ctrl><hp:footNote number=\"1\" instId=\"1\"><hp:subList id=\"\" vertAlign=\"TOP\">"
+        "<hp:p id=\"0\" paraPrIDRef=\"0\" styleIDRef=\"0\"><hp:run charPrIDRef=\"0\">"
+        "<hp:ctrl><hp:autoNum num=\"1\" numType=\"FOOTNOTE\"/></hp:ctrl><hp:t> 각주 내용</hp:t></hp:run></hp:p>"
+        "</hp:subList></hp:footNote></hp:ctrl><hp:t> 있는 문단</hp:t></hp:run></hp:p>"
+        "<hp:p id=\"0\" paraPrIDRef=\"0\" styleIDRef=\"0\"><hp:run charPrIDRef=\"0\"><hp:t>가나다</hp:t>"
+        "<hp:ctrl><hp:fieldBegin id=\"7\" type=\"CLICK_HERE\" name=\"x\"/></hp:ctrl><hp:t>라마</hp:t>"
+        "<hp:ctrl><hp:fieldEnd beginIDRef=\"7\"/></hp:ctrl><hp:t>바사<hp:tab width=\"4000\" leader=\"0\" type=\"1\"/>"
+        "자</hp:t></hp:run><hp:linesegarray>"
+        "<hp:lineseg textpos=\"0\" vertpos=\"0\" vertsize=\"1000\" textheight=\"1000\" baseline=\"850\" spacing=\"600\" "
+        "horzpos=\"0\" horzsize=\"42520\" flags=\"393216\"/>"
+        "<hp:lineseg textpos=\"21\" vertpos=\"1600\" vertsize=\"1000\" textheight=\"1000\" baseline=\"850\" spacing=\"600\" "
+        "horzpos=\"0\" horzsize=\"42520\" flags=\"393216\"/>"
+        "<hp:lineseg textpos=\"31\" vertpos=\"3200\" vertsize=\"1000\" textheight=\"1000\" baseline=\"850\" spacing=\"600\" "
+        "horzpos=\"0\" horzsize=\"42520\" flags=\"393216\"/></hp:linesegarray></hp:p></hs:sec>";
+    char src[512];
+    hp_document *d = NULL;
+    const hp_section *sec;
+    size_t i;
+    corpus_path(src, sizeof(src), "ethics", "hwpx");
+    EXPECT(hp_hwpx_read(src, &d) == HP_OK, "subtexts: read source");
+    if (!d) {
+        return;
+    }
+    for (i = 0; i < d->package->entry_count; i++) {
+        hp_package_entry *p = &d->package->entries[i];
+        if (!strcmp(p->name, "Contents/section0.xml")) {
+            free(p->data);
+            p->len = strlen(section);
+            p->data = (unsigned char *)malloc(p->len + 1);
+            if (p->data) {
+                memcpy(p->data, section, p->len + 1);
+            }
+        }
+    }
+    EXPECT(hp_hwpx_write(d, "tmp/subtexts.hwpx") == HP_OK, "subtexts: write");
+    hp_document_free(d);
+    d = NULL;
+    EXPECT(hp_hwpx_read("tmp/subtexts.hwpx", &d) == HP_OK && d && d->section_count >= 1, "subtexts: reread");
+    if (!d) {
+        return;
+    }
+    sec = &d->sections[0];
+    EXPECT(sec->subtext_count == 3, "subtexts: header, footer and footnote");
+    if (sec->subtext_count == 3) {
+        const hp_subtext *h = &sec->subtexts[0], *f = &sec->subtexts[1], *n = &sec->subtexts[2];
+        EXPECT(h->kind == HP_SUB_HEADER && h->vert_align == 2 && h->apply == 0 && h->paragraph_count == 1 &&
+                   !strcmp(h->paragraphs[0].runs[0].text, "머리말 시험"),
+               "subtexts: header text, bottom aligned");
+        EXPECT(f->kind == HP_SUB_FOOTER && f->apply == 2 && f->paragraph_count == 1 &&
+                   f->paragraphs[0].run_count == 3 && f->paragraphs[0].runs[1].field == 1,
+               "subtexts: odd-page footer with a page number field");
+        EXPECT(n->kind == HP_SUB_FOOTNOTE && n->block == 4 && n->paragraph_count == 1 &&
+                   !strcmp(n->paragraphs[0].runs[0].text, "1)"),
+               "subtexts: footnote numbered 1) in its text, anchored to its paragraph");
+    }
+    EXPECT(sec->block_count == 6, "subtexts: body blocks");
+    if (sec->block_count == 6) {
+        const hp_paragraph *a = &sec->blocks[1].paragraph, *b = &sec->blocks[2].paragraph,
+                           *c = &sec->blocks[3].paragraph, *fn = &sec->blocks[4].paragraph,
+                           *fl = &sec->blocks[5].paragraph;
+        EXPECT(!strcmp(a->runs[0].text, "1. ") && a->generated_prefix == 3, "numbers: 1.");
+        EXPECT(!strcmp(b->runs[0].text, "1.1. ") && b->generated_prefix == 5, "numbers: 1.1.");
+        EXPECT(!strcmp(c->runs[0].text, "2. "), "numbers: 2. (next at level 1)");
+        EXPECT(fn->run_count == 3 && !strcmp(fn->runs[1].text, "1)"), "footnote: reference number in the text");
+        /* 가나다[8]라마[8]바사[tab 8]자: saved 21 -> 5 (바), 31 -> 8 (자) */
+        EXPECT(fl->seg_count == 3 && fl->segs[1].textpos == 5 && fl->segs[2].textpos == 8,
+               "saved lines: controls and tabs count 8 units");
+    }
+    hp_document_free(d);
+}
+
 static void test_refused_and_damaged(void) {
     char hwp[512];
     size_t len, i;
@@ -389,6 +485,7 @@ int main(int argc, char **argv) {
     test_convert_to_hwpx();
     test_editor_on_hwp();
     test_converted_details();
+    test_subtexts();
     test_refused_and_damaged();
     if (failures) {
         fprintf(stderr, "%d hwp test(s) failed\n", failures);

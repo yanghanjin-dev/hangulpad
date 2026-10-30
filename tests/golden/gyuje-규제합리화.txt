@@ -3,7 +3,7 @@ section 0 page=59528x84186 margin l=5669 r=5669 t=2834 b=2834 cols=1 gap=0 block
   para align=1 indent l=0 r=0 first=0 space before=0 after=0 line=160%
     object-anchor-only=1
     seg textpos=0 vpos=0 vsize=1500 th=1500 sp=4294965796 hpos=0 hsize=48188
-    seg textpos=25 vpos=0 vsize=4600 th=4600 sp=4294966996 hpos=0 hsize=48188
+    seg textpos=1 vpos=0 vsize=4600 th=4600 sp=4294966996 hpos=0 hsize=48188
     run " " font="휴먼명조" size=1500 color=000000 bold=0
       metrics width=95,95,95,95,95,95,95 spacing=0,0,0,0,0,0,0
   table rows=1 cols=3 w=47697 h=4034 cells=3
@@ -1399,8 +1399,8 @@ section 0 page=59528x84186 margin l=5669 r=5669 t=2834 b=2834 cols=1 gap=0 block
       para align=3 indent l=0 r=0 first=-324 space before=0 after=0 line=140%
         inline-prefix=7719
         seg textpos=0 vpos=0 vsize=2050 th=2050 sp=520 hpos=0 hsize=46204
-        seg textpos=38 vpos=2570 vsize=1300 th=1300 sp=520 hpos=0 hsize=46204
-        seg textpos=78 vpos=4390 vsize=1300 th=1300 sp=520 hpos=0 hsize=46204
+        seg textpos=37 vpos=2570 vsize=1300 th=1300 sp=520 hpos=0 hsize=46204
+        seg textpos=77 vpos=4390 vsize=1300 th=1300 sp=520 hpos=0 hsize=46204
         run "“" font="맑은 고딕" size=1300 color=000000 bold=0
           metrics width=100,100,100,100,100,100,100 spacing=-5,-5,-5,-5,-5,-5,-5
         run "사람 대신 로봇이 공동주택단지에 택배를 배송하게 하고 싶어도," font="맑은 고딕" size=1300 color=000000 bold=0
@@ -1500,8 +1500,8 @@ section 0 page=59528x84186 margin l=5669 r=5669 t=2834 b=2834 cols=1 gap=0 block
       para align=3 indent l=0 r=0 first=-324 space before=0 after=0 line=150%
         inline-prefix=7719
         seg textpos=0 vpos=0 vsize=2050 th=2050 sp=652 hpos=0 hsize=46204
-        seg textpos=35 vpos=2702 vsize=1300 th=1300 sp=652 hpos=0 hsize=46204
-        seg textpos=82 vpos=4654 vsize=1300 th=1300 sp=652 hpos=0 hsize=46204
+        seg textpos=34 vpos=2702 vsize=1300 th=1300 sp=652 hpos=0 hsize=46204
+        seg textpos=81 vpos=4654 vsize=1300 th=1300 sp=652 hpos=0 hsize=46204
         run " “" font="맑은 고딕" size=1300 color=000000 bold=0
         run "계단이나 울퉁불퉁한 노면에서도 잘 다니는 로봇인데, 정작 " font="맑은 고딕" size=1300 color=000000 bold=0
           metrics width=100,100,100,100,100,100,100 spacing=-1,-1,-1,-1,-1,-1,-1
@@ -1638,8 +1638,8 @@ section 0 page=59528x84186 margin l=5669 r=5669 t=2834 b=2834 cols=1 gap=0 block
       para align=3 indent l=0 r=0 first=-324 space before=0 after=0 line=200%
         inline-prefix=7719
         seg textpos=0 vpos=0 vsize=2050 th=2050 sp=1300 hpos=0 hsize=46204
-        seg textpos=40 vpos=3350 vsize=1300 th=1300 sp=1300 hpos=0 hsize=46204
-        seg textpos=83 vpos=5950 vsize=1300 th=1300 sp=1300 hpos=0 hsize=46204
+        seg textpos=39 vpos=3350 vsize=1300 th=1300 sp=1300 hpos=0 hsize=46204
+        seg textpos=82 vpos=5950 vsize=1300 th=1300 sp=1300 hpos=0 hsize=46204
         run "“" font="맑은 고딕" size=1300 color=000000 bold=0
           metrics width=100,100,100,100,100,100,100 spacing=-9,-9,-9,-9,-9,-9,-9
         run "반도체 시장은 빠르게 변하고 있는데, 저희는 기다림의 연속입니다." font="맑은 고딕" size=1300 color=000000 bold=0
@@ -1784,10 +1784,10 @@ section 0 page=59528x84186 margin l=5669 r=5669 t=2834 b=2834 cols=1 gap=0 block
       para align=3 indent l=0 r=0 first=-324 space before=0 after=0 line=160%
         inline-prefix=7719
         seg textpos=0 vpos=0 vsize=2050 th=2050 sp=780 hpos=0 hsize=46204
-        seg textpos=36 vpos=2830 vsize=1300 th=1300 sp=780 hpos=0 hsize=46204
-        seg textpos=77 vpos=4910 vsize=1300 th=1300 sp=780 hpos=0 hsize=46204
-        seg textpos=117 vpos=6990 vsize=1300 th=1300 sp=780 hpos=0 hsize=46204
-        seg textpos=161 vpos=9070 vsize=1300 th=1300 sp=780 hpos=0 hsize=46204
+        seg textpos=35 vpos=2830 vsize=1300 th=1300 sp=780 hpos=0 hsize=46204
+        seg textpos=76 vpos=4910 vsize=1300 th=1300 sp=780 hpos=0 hsize=46204
+        seg textpos=116 vpos=6990 vsize=1300 th=1300 sp=780 hpos=0 hsize=46204
+        seg textpos=160 vpos=9070 vsize=1300 th=1300 sp=780 hpos=0 hsize=46204
         run " “공장에서 공항까지 이동하고 상품을 적재하면 꼬박 6~7시간 " font="맑은 고딕" size=1300 color=000000 bold=0
         run "걸립니다. 수출신고가 수리된 후에야 물품을 공장에서 운송할 수 있다 보니 " font="맑은 고딕" size=1300 color=000000 bold=0
           metrics width=100,100,100,100,100,100,100 spacing=-2,-2,-2,-2,-2,-2,-2
@@ -2363,9 +2363,9 @@ section 0 page=59528x84186 margin l=5669 r=5669 t=2834 b=2834 cols=1 gap=0 block
       para align=3 indent l=0 r=0 first=-324 space before=0 after=0 line=160%
         inline-prefix=7719
         seg textpos=0 vpos=0 vsize=2050 th=2050 sp=780 hpos=0 hsize=46204
-        seg textpos=38 vpos=2830 vsize=1300 th=1300 sp=780 hpos=0 hsize=46204
-        seg textpos=82 vpos=4910 vsize=1300 th=1300 sp=780 hpos=0 hsize=46204
-        seg textpos=128 vpos=6990 vsize=1300 th=1300 sp=780 hpos=0 hsize=46204
+        seg textpos=37 vpos=2830 vsize=1300 th=1300 sp=780 hpos=0 hsize=46204
+        seg textpos=81 vpos=4910 vsize=1300 th=1300 sp=780 hpos=0 hsize=46204
+        seg textpos=127 vpos=6990 vsize=1300 th=1300 sp=780 hpos=0 hsize=46204
         run "“AIDC는 전력이나 냉각, 네트워크 시스템 등이 집합된 대규모 " font="맑은 고딕" size=1300 color=000000 bold=0
           metrics width=100,100,100,100,100,100,100 spacing=-4,-4,-4,-4,-4,-4,-4
         run "시설이에요." font="맑은 고딕" size=1300 color=000000 bold=0

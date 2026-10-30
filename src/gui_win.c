@@ -79,6 +79,14 @@ static void hit_add(const hp_paragraph *para, size_t ci, size_t len, double x0, 
     if (!g_hit || !para->source_p) {
         return;
     }
+    /* the paragraph number is not part of the edited text (0.12.0) */
+    if (ci < para->generated_prefix) {
+        if (len) {
+            return;
+        }
+        ci = para->generated_prefix;
+    }
+    ci -= para->generated_prefix;
     if (g_hit->n == g_hit->cap) {
         size_t cap = g_hit->cap ? g_hit->cap * 2 : 1024;
         h = (hp_hit *)realloc(g_hit->v, cap * sizeof(*h));
@@ -155,6 +163,14 @@ static int g_page_capacity;
 static layout_piece *g_pieces;
 static int g_piece_count, g_piece_capacity;
 static int g_page_count;
+/* Footnotes placed by rebuild_pages (0.12.0): page and height of each, the
+ * space each page keeps for them, and each block's first page (headers and
+ * footers apply from the page of their control). */
+typedef struct { const hp_subtext *sub; size_t section; int page, height; } note_ref;
+static note_ref *g_notes;
+static int g_note_count, g_note_capacity;
+static int *g_page_reserve, g_reserve_capacity;
+static int *g_block_page, g_block_page_capacity;
 static int g_page_index;
 static IWICImagingFactory *g_wic;
 static struct { LOGFONTW lf; HFONT font; } g_regular_fonts[64];
@@ -393,6 +409,7 @@ static int layout_saved_para(HDC hdc, const hp_paragraph *para, int left, int ri
                              int base, int draw, int *breaks, int capacity, int *hard_breaks, hp_cut_map *ink, int ink_origin);
 
 static int layout_text_para(HDC hdc, const hp_paragraph *para, int left, int right, int base, int draw, int *ends, int capacity, int *hard, hp_cut_map *ink, int ink_origin);
+static void draw_para(HDC hdc, const hp_paragraph *para, int left, int right, int *y);
 static int measure_para_height(HDC hdc, const hp_paragraph *para, int content_w) {
     if (!para) return 8;
     if(para->object_anchor_only)return 0;
@@ -850,7 +867,135 @@ static int append_piece(hp_slice slice, int block, size_t section) {
     }
     g_pieces[g_piece_count++]=(layout_piece){block,slice.column,slice.y,slice.offset,slice.height,0};
     g_pages[slice.page].count++;
+    if(block>=0 && block<g_block_page_capacity && g_block_page[block]<0)g_block_page[block]=slice.page;
     return 1;
+}
+
+/* ---- footnotes, headers and footers (0.12.0) ---- */
+
+static int reserve_at(int page) {
+    if(page>=g_reserve_capacity) {
+        int capacity=g_reserve_capacity ? g_reserve_capacity*2 : 64,*next;
+        while(capacity<=page)capacity*=2;
+        next=(int *)realloc(g_page_reserve,(size_t)capacity*sizeof(*next));
+        if(!next)return 0;
+        memset(next+g_reserve_capacity,0,(size_t)(capacity-g_reserve_capacity)*sizeof(*next));
+        g_page_reserve=next;g_reserve_capacity=capacity;
+    }
+    return g_page_reserve[page];
+}
+
+static int subtext_height(HDC hdc,const hp_subtext *sub,int width) {
+    size_t i;int h=0;
+    for(i=0;i<sub->paragraph_count;i++)h+=measure_para_height(hdc,&sub->paragraphs[i],width);
+    return h;
+}
+
+/* Footnotes whose reference is in flat block `flat` go to `page`: returns
+ * the space they add there (separator first). */
+static int notes_space(HDC hdc,int flat,int width,int page,int place) {
+    const hp_section *sec;size_t si,base=0,k;int add=0,first;
+    if(!g_doc || flat<0 || flat>=g_flat_count)return 0;
+    sec=&g_doc->sections[g_flat[flat].sec];
+    for(si=0;si<g_flat[flat].sec;si++)base+=g_doc->sections[si].block_count;
+    first=reserve_at(page)==0;
+    for(k=0;k<sec->subtext_count;k++) {
+        const hp_subtext *sub=&sec->subtexts[k];
+        size_t anchor=sub->block<sec->block_count ? sub->block : (sec->block_count ? sec->block_count-1 : 0);
+        int h;
+        if(sub->kind!=HP_SUB_FOOTNOTE || base+anchor!=(size_t)flat)continue;
+        h=subtext_height(hdc,sub,width);
+        add+=h+(first ? hwp_px_i((int32_t)(sec->footnote_shape.above_hwp+sec->footnote_shape.below_hwp))
+                      : hwp_px_i((int32_t)sec->footnote_shape.between_hwp));
+        first=0;
+        if(place && g_note_count<g_note_capacity) {
+            g_notes[g_note_count++]=(note_ref){sub,g_flat[flat].sec,page,h};
+        }
+    }
+    return add;
+}
+
+/* Header or footer for a page: the last one in the document whose control
+ * is on this page or before it and that applies to odd/even pages alike or
+ * to this page's parity. */
+static const hp_subtext *page_subtext(int page_index,hp_subtext_kind kind) {
+    const hp_subtext *found=NULL;size_t si,k,base=0;int odd=g_pages[page_index].printed_number%2!=0;
+    for(si=0;si<g_doc->section_count;si++) {
+        const hp_section *sec=&g_doc->sections[si];
+        for(k=0;k<sec->subtext_count;k++) {
+            const hp_subtext *sub=&sec->subtexts[k];
+            size_t anchor=sub->block<sec->block_count ? sub->block : (sec->block_count ? sec->block_count-1 : 0);
+            int flat=(int)(base+anchor),from;
+            if(sub->kind!=kind || (sub->apply==1 && odd) || (sub->apply==2 && !odd))continue;
+            from=flat<g_block_page_capacity && g_block_page[flat]>=0 ? g_block_page[flat] : 0;
+            if(from<=page_index)found=sub;
+        }
+        base+=sec->block_count;
+    }
+    return found;
+}
+
+/* A header/footer paragraph with its page number fields filled in. */
+static void draw_field_para(HDC hdc,const hp_paragraph *para,int left,int right,int *y,int page_number) {
+    hp_paragraph copy=*para;hp_run *runs=NULL;char numbers[2][16];size_t r;
+    snprintf(numbers[0],sizeof(numbers[0]),"%d",page_number);
+    snprintf(numbers[1],sizeof(numbers[1]),"%d",g_page_count);
+    for(r=0;r<para->run_count;r++)if(para->runs[r].field>=1 && para->runs[r].field<=2)break;
+    if(r<para->run_count && (runs=(hp_run *)malloc(para->run_count*sizeof(*runs)))!=NULL) {
+        memcpy(runs,para->runs,para->run_count*sizeof(*runs));
+        for(r=0;r<para->run_count;r++)if(runs[r].field>=1 && runs[r].field<=2)runs[r].text=numbers[runs[r].field-1];
+        copy.runs=runs;
+    }
+    draw_para(hdc,&copy,left,right,y);
+    free(runs);
+}
+
+static void draw_subtext(HDC hdc,const hp_subtext *sub,int left,int right,int top,int area,int page_number) {
+    size_t i;int y,h=subtext_height(hdc,sub,right-left);
+    y=top+(sub->vert_align==1 ? (area-h)/2 : sub->vert_align==2 ? area-h : 0);
+    for(i=0;i<sub->paragraph_count;i++)draw_field_para(hdc,&sub->paragraphs[i],left,right,&y,page_number);
+}
+
+static void draw_page_extras(HDC mem,int page_index,int ml,int mr,int mb,int col_w) {
+    const layout_page *pg=&g_pages[page_index];
+    const hp_section *section=&g_doc->sections[pg->section];
+    const hp_subtext *sub;
+    int k,saved;
+    /* header: the header margin below the top margin; more text overlaps the body */
+    if((sub=page_subtext(page_index,HP_SUB_HEADER))!=NULL)
+        draw_subtext(mem,sub,ml,PAGE_W_PX-mr,padding_px(section->page.margin_top),padding_px(section->page.header_height),pg->printed_number);
+    /* footer: above the bottom margin; what does not fit on the paper is cut */
+    if((sub=page_subtext(page_index,HP_SUB_FOOTER))!=NULL) {
+        int area=padding_px(section->page.footer_height),bottom=PAGE_H_PX-padding_px(section->page.margin_bottom);
+        saved=SaveDC(mem);
+        IntersectClipRect(mem,0,0,PAGE_W_PX,PAGE_H_PX);
+        draw_subtext(mem,sub,ml,PAGE_W_PX-mr,bottom-area,area,pg->printed_number);
+        RestoreDC(mem,saved);
+    }
+    /* footnotes: separator and notes at the bottom of the body */
+    if(page_index<g_reserve_capacity && g_page_reserve[page_index]>0) {
+        const hp_note_shape *ns=&section->footnote_shape;
+        int y=PAGE_H_PX-mb-g_page_reserve[page_index],first=1;
+        for(k=0;k<g_note_count;k++) {
+            const note_ref *note=&g_notes[k];
+            size_t i;
+            if(note->page!=page_index)continue;
+            if(first) {
+                y+=hwp_px_i((int32_t)ns->above_hwp);
+                if(ns->line_type) {
+                    int length=ns->line_length_hwp>0 ? hp_line_px((uint32_t)ns->line_length_hwp) : col_w/3;
+                    HPEN pen=CreatePen(PS_SOLID,1,RGB(ns->line_color>>16&255,ns->line_color>>8&255,ns->line_color&255)),old;
+                    if(length>col_w)length=col_w;
+                    old=(HPEN)SelectObject(mem,pen);
+                    MoveToEx(mem,ml,y,NULL);LineTo(mem,ml+length,y);
+                    SelectObject(mem,old);DeleteObject(pen);
+                }
+                y+=hwp_px_i((int32_t)ns->below_hwp);
+                first=0;
+            } else y+=hwp_px_i((int32_t)ns->between_hwp);
+            for(i=0;i<note->sub->paragraph_count;i++)draw_para(mem,&note->sub->paragraphs[i],ml,ml+col_w,&y);
+        }
+    }
 }
 static void assign_page_numbers(void) {
     int page,number=1,position=0;size_t previous_section=(size_t)-1;
@@ -892,7 +1037,24 @@ static void rebuild_pages(HWND hwnd) {
      * page start re-synchronizes (0.10.1). */
     int synced=1,start_page,start_column;
     g_page_count=g_piece_count=g_unsafe_table_cuts=g_suppressed_headers=0;
+    g_note_count=0;
+    if(g_reserve_capacity)memset(g_page_reserve,0,(size_t)g_reserve_capacity*sizeof(*g_page_reserve));
     if (!g_flat_count) return;
+    {
+        /* every block's first page, and room for every footnote (0.12.0) */
+        size_t si,k;int notes=0;
+        if(g_block_page_capacity<g_flat_count) {
+            int *next=(int *)realloc(g_block_page,(size_t)g_flat_count*sizeof(*next));
+            if(next){g_block_page=next;g_block_page_capacity=g_flat_count;}
+        }
+        for(i=0;i<g_block_page_capacity;i++)g_block_page[i]=-1;
+        for(si=0;si<g_doc->section_count;si++)for(k=0;k<g_doc->sections[si].subtext_count;k++)
+            notes+=g_doc->sections[si].subtexts[k].kind==HP_SUB_FOOTNOTE;
+        if(notes>g_note_capacity) {
+            note_ref *next=(note_ref *)realloc(g_notes,(size_t)notes*sizeof(*next));
+            if(next){g_notes=next;g_note_capacity=notes;}
+        }
+    }
     hdc=GetDC(hwnd);
     if (!hdc) return;
     for(i=0;i<g_flat_count;i++) {
@@ -924,6 +1086,20 @@ static void rebuild_pages(HWND hwnd) {
             /* Drop accumulated rounding/trailing leading only in empty space;
              * expanded text must never overlap preceding visible content. */
             if(target>=previous_ink_bottom && target<flow.height)flow.y=target;
+        }
+        /* footnotes referenced here take room at the bottom of this page; the
+         * reference line moves on when the notes would not leave room for it */
+        flow.height=content_h-reserve_at(flow.page);
+        if(flow.height<1)flow.height=1;
+        {
+            int add=notes_space(hdc,i,col_w,flow.page,0);
+            if(add>0) {
+                if(flow.y>0 && flow.y+add+hwp_px_i(1600)>flow.height)hp_flow_break(&flow,1);
+                add=notes_space(hdc,i,col_w,flow.page,1);
+                if(reserve_at(flow.page)>=0 && flow.page<g_reserve_capacity)g_page_reserve[flow.page]+=add;
+                flow.height=content_h-reserve_at(flow.page);
+                if(flow.height<1)flow.height=1;
+            }
         }
         h=measure_block_height(hdc,block,col_w);
         if(block->kind==HP_BLOCK_PARAGRAPH && block->paragraph.object_anchor_only)continue;
@@ -977,6 +1153,8 @@ static void rebuild_pages(HWND hwnd) {
         while(offset<h) {
             hp_slice slice;
             int reserved=0;
+            flow.height=content_h-reserve_at(flow.page);
+            if(flow.height<1)flow.height=1;
             limit=h;
             if(offset==0 && block->has_saved_y && ink.count && h>flow.height-flow.y) {
                 int visible=ink.bands[ink.count-1].bottom;
@@ -1810,6 +1988,7 @@ static void paint_document_page(HDC mem,int page_index) {
             int top=mt+piece->y;
             render_layout_piece(mem,piece,left,top,col_w);
         }
+        draw_page_extras(mem,page_index,ml,mr,mb,col_w);
         if(!pg->number_hidden && pg->number_position>0) {
             wchar_t pn[64];
             wchar_t *side=utf8_to_wide(pg->number_side);

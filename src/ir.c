@@ -171,6 +171,16 @@ static void hp_section_free(hp_section *s) {
     free(s->paragraphs);
     s->paragraphs = NULL;
     s->paragraph_count = 0;
+    for (i = 0; i < s->subtext_count; i++) {
+        size_t j;
+        for (j = 0; j < s->subtexts[i].paragraph_count; j++) {
+            hp_paragraph_free(&s->subtexts[i].paragraphs[j]);
+        }
+        free(s->subtexts[i].paragraphs);
+    }
+    free(s->subtexts);
+    s->subtexts = NULL;
+    s->subtext_count = 0;
 }
 
 hp_document *hp_document_new(void) {

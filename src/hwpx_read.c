@@ -40,8 +40,37 @@ typedef struct {
     int32_t prev_hwp;
     int32_t next_hwp;
     int line_spacing_percent;
+    int heading_type;  /* 0 none, 1 outline, 2 number, 3 bullet */
+    int heading_id;    /* numbering / bullet id */
+    int heading_level; /* 0-based */
     int valid;
 } hp_para_style;
+
+/* <hh:numbering>: per level the format ("^1." etc.), number style and start */
+typedef struct {
+    char *format[10];
+    int num_format[10];
+    int start[10];
+    int char_id[10]; /* -1: the paragraph's own character shape */
+    int valid;
+} hp_numbering_def;
+
+/* How footnote numbers are written (secPr autoNumFormat). */
+typedef struct {
+    int num_format;
+    char prefix[16], suffix[16];
+} hp_note_format;
+
+/* Mutable state while reading the sections of one document (0.12.0). */
+typedef struct {
+    int (*counters)[10]; /* per numbering id: last number per level, 0 = unused */
+    size_t counter_count;
+    int outline_id;      /* the section's outlineShapeIDRef */
+    hp_note_format footnote;
+    int note_count;      /* footnotes so far (numbering is continuous) */
+    int current_note;    /* number of the note whose text is being read, 0 outside */
+    hp_section *sec;     /* section being read */
+} hp_read_state;
 
 typedef struct {
     int left;
@@ -83,6 +112,11 @@ typedef struct {
      * to record each paragraph's source index (hp_paragraph.source_p) */
     size_t *p_starts;
     size_t p_count;
+    hp_numbering_def *numberings;
+    size_t numbering_count;
+    char **bullets; /* UTF-8 bullet character per bullet id */
+    size_t bullet_count;
+    hp_read_state *state; /* the tables are read-only; this is not */
 } hp_style_tables;
 
 static uint32_t p_index(const hp_style_tables *st, const hp_xml_node *p) {
@@ -146,6 +180,17 @@ static void style_tables_free(hp_style_tables *st) {
     free(st->borders);
     free(st->bins);
     free(st->p_starts);
+    for (i = 0; i < st->numbering_count; i++) {
+        int k;
+        for (k = 0; k < 10; k++) {
+            free(st->numberings[i].format[k]);
+        }
+    }
+    free(st->numberings);
+    for (i = 0; i < st->bullet_count; i++) {
+        free(st->bullets[i]);
+    }
+    free(st->bullets);
     memset(st, 0, sizeof(*st));
 }
 
@@ -328,6 +373,121 @@ static int is_empty_element_tag(const hp_xml_node *el) {
     return el->inner_start == el->end; /* written as <x/> */
 }
 
+/* ---------- automatic numbers (0.12.0) ---------- */
+
+static const char *const NUMBER_FORMATS[] = {
+    "DIGIT",           "CIRCLED_DIGIT",           "ROMAN_CAPITAL", "ROMAN_SMALL",          "LATIN_CAPITAL",
+    "LATIN_SMALL",     "CIRCLED_LATIN_CAPITAL",   "CIRCLED_LATIN_SMALL", "HANGUL_SYLLABLE", "CIRCLED_HANGUL_SYLLABLE",
+    "HANGUL_JAMO",     "CIRCLED_HANGUL_JAMO",     "HANGUL_PHONETIC", "IDEOGRAPH",           "CIRCLED_IDEOGRAPH"};
+
+static int number_format_code(const char *s) {
+    size_t i;
+    for (i = 0; s && i < sizeof(NUMBER_FORMATS) / sizeof(NUMBER_FORMATS[0]); i++) {
+        if (strcmp(s, NUMBER_FORMATS[i]) == 0) {
+            return (int)i;
+        }
+    }
+    return 0;
+}
+
+static void sb_codepoint(sbuf *b, uint32_t cp) {
+    char u[4];
+    if (cp < 0x80) {
+        u[0] = (char)cp;
+        sb_putn(b, u, 1);
+    } else if (cp < 0x800) {
+        u[0] = (char)(0xC0 | (cp >> 6));
+        u[1] = (char)(0x80 | (cp & 0x3F));
+        sb_putn(b, u, 2);
+    } else {
+        u[0] = (char)(0xE0 | (cp >> 12));
+        u[1] = (char)(0x80 | ((cp >> 6) & 0x3F));
+        u[2] = (char)(0x80 | (cp & 0x3F));
+        sb_putn(b, u, 3);
+    }
+}
+
+/* n written in one of NUMBER_FORMATS (as 한글 counts: 가나다…하, ㄱㄴ…ㅎ, ①…) */
+static void format_number(sbuf *b, int n, int fmt) {
+    static const uint16_t syllables[14] = {0xAC00, 0xB098, 0xB2E4, 0xB77C, 0xB9C8, 0xBC14, 0xC0AC,
+                                           0xC544, 0xC790, 0xCC28, 0xCE74, 0xD0C0, 0xD30C, 0xD558};
+    static const uint16_t jamo[14] = {0x3131, 0x3134, 0x3137, 0x3139, 0x3141, 0x3142, 0x3145,
+                                      0x3147, 0x3148, 0x314A, 0x314B, 0x314C, 0x314D, 0x314E};
+    static const uint16_t phonetic[10] = {0xC77C, 0xC774, 0xC0BC, 0xC0AC, 0xC624, 0xC721, 0xCE60, 0xD314, 0xAD6C, 0xC2ED};
+    static const uint16_t ideograph[10] = {0x4E00, 0x4E8C, 0x4E09, 0x56DB, 0x4E94, 0x516D, 0x4E03, 0x516B, 0x4E5D, 0x5341};
+    char digits[16];
+    if (n < 1) {
+        n = 1;
+    }
+    switch (fmt) {
+    case 1: /* ① … ⑳ ㉑ … ㉟ ㊱ … ㊿ */
+        if (n <= 20) {
+            sb_codepoint(b, 0x2460 + (uint32_t)n - 1);
+            return;
+        }
+        if (n <= 35) {
+            sb_codepoint(b, 0x3251 + (uint32_t)n - 21);
+            return;
+        }
+        if (n <= 50) {
+            sb_codepoint(b, 0x32B1 + (uint32_t)n - 36);
+            return;
+        }
+        break;
+    case 2:
+    case 3: {
+        static const int values[13] = {1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1};
+        static const char *const upper[13] = {"M", "CM", "D", "CD", "C", "XC", "L", "XL", "X", "IX", "V", "IV", "I"};
+        static const char *const lower[13] = {"m", "cm", "d", "cd", "c", "xc", "l", "xl", "x", "ix", "v", "iv", "i"};
+        int i, v = n > 3999 ? 3999 : n;
+        for (i = 0; i < 13; i++) {
+            while (v >= values[i]) {
+                sb_putn(b, fmt == 2 ? upper[i] : lower[i], strlen(upper[i]));
+                v -= values[i];
+            }
+        }
+        return;
+    }
+    case 4:
+    case 5:
+        sb_codepoint(b, (fmt == 4 ? 'A' : 'a') + (uint32_t)((n - 1) % 26));
+        return;
+    case 6:
+    case 7:
+        sb_codepoint(b, (fmt == 6 ? 0x24B6 : 0x24D0) + (uint32_t)((n - 1) % 26));
+        return;
+    case 8:
+        sb_codepoint(b, syllables[(n - 1) % 14]);
+        return;
+    case 9:
+        sb_codepoint(b, 0x326E + (uint32_t)((n - 1) % 14));
+        return;
+    case 10:
+        sb_codepoint(b, jamo[(n - 1) % 14]);
+        return;
+    case 11:
+        sb_codepoint(b, 0x3260 + (uint32_t)((n - 1) % 14));
+        return;
+    case 12:
+    case 13:
+        if (n <= 10) {
+            sb_codepoint(b, fmt == 12 ? phonetic[n - 1] : ideograph[n - 1]);
+            return;
+        }
+        break;
+    case 14:
+        if (n <= 10) {
+            sb_codepoint(b, 0x3280 + (uint32_t)n - 1);
+            return;
+        }
+        break;
+    default:
+        break;
+    }
+    snprintf(digits, sizeof(digits), "%d", n);
+    sb_putn(b, digits, strlen(digits));
+}
+
 /* ---------- header.xml ---------- */
 
 static void parse_header_styles(const hp_xml_node *root, hp_style_tables *st) {
@@ -403,6 +563,14 @@ static void parse_header_styles(const hp_xml_node *root, hp_style_tables *st) {
         ps->align = HP_ALIGN_JUSTIFY;
         ps->line_spacing_percent = 160;
         ps->page_break_before = (int)attr_l(hp_xml_find(n, "breakSetting"), "pageBreakBefore", 0) != 0;
+        {
+            const hp_xml_node *hd = hp_xml_child(n, "heading");
+            const char *type = hp_xml_attr(hd, "type");
+            long long ref = attr_l(hd, "idRef", 0), level = attr_l(hd, "level", 0);
+            ps->heading_type = !type ? 0 : !strcmp(type, "OUTLINE") ? 1 : !strcmp(type, "NUMBER") ? 2 : !strcmp(type, "BULLET") ? 3 : 0;
+            ps->heading_id = ref >= 0 && ref <= HP_MAX_STYLE_ID ? (int)ref : 0;
+            ps->heading_level = level >= 0 && level < 10 ? (int)level : 0;
+        }
         al = hp_xml_find(n, "align");
         if (al && hp_xml_attr(al, "horizontal")) {
             ps->align = parse_align_name(hp_xml_attr(al, "horizontal"));
@@ -501,6 +669,44 @@ static void parse_header_styles(const hp_xml_node *root, hp_style_tables *st) {
             }
         }
         br->valid = br->left || br->right || br->top || br->bottom;
+    }
+
+    /* paragraph numbering (also outline numbering) and bullets, 0.12.0 */
+    for (n = hp_xml_find(root, "numbering"); n; n = hp_xml_find_after(root, n, "numbering")) {
+        long long id = attr_l(n, "id", -1);
+        hp_numbering_def *nd;
+        const hp_xml_node *h;
+        int k;
+        if (!ensure_slot((void **)&st->numberings, &st->numbering_count, sizeof(hp_numbering_def), id)) {
+            continue;
+        }
+        nd = &st->numberings[id];
+        for (k = 0; k < 10; k++) {
+            free(nd->format[k]);
+            nd->format[k] = NULL;
+            nd->start[k] = 1;
+            nd->num_format[k] = 0;
+            nd->char_id[k] = -1;
+        }
+        for (h = hp_xml_child(n, "paraHead"); h; h = hp_xml_next(h, "paraHead")) {
+            long long level = attr_l(h, "level", 0), start = attr_l(h, "start", 1), ch = attr_l(h, "charPrIDRef", -1);
+            if (level < 1 || level > 10) {
+                continue;
+            }
+            nd->format[level - 1] = element_text(h);
+            nd->num_format[level - 1] = number_format_code(hp_xml_attr(h, "numFormat"));
+            nd->start[level - 1] = start >= 0 && start < 100000 ? (int)start : 1;
+            nd->char_id[level - 1] = ch >= 0 && ch <= HP_MAX_STYLE_ID ? (int)ch : -1;
+        }
+        nd->valid = 1;
+    }
+    for (n = hp_xml_find(root, "bullet"); n; n = hp_xml_find_after(root, n, "bullet")) {
+        long long id = attr_l(n, "id", -1);
+        const char *ch = hp_xml_attr(n, "char");
+        if (ch && ensure_slot((void **)&st->bullets, &st->bullet_count, sizeof(char *), id)) {
+            free(st->bullets[id]);
+            st->bullets[id] = hp_strdup(ch);
+        }
     }
 }
 
@@ -701,6 +907,323 @@ static int is_object(const hp_xml_node *n) {
  * footers, footnotes) are not body text and are skipped. Returns NULL for none. */
 static int run_child_has_text(const hp_xml_node *n) {
     return !hp_xml_is(n, "ctrl") && (hp_xml_is(n, "t") || hp_xml_find(n, "t") != NULL);
+}
+
+/* ---------- saved line positions (0.12.0) ----------
+ * <hp:lineseg textpos> counts as HWP text does: every control (field,
+ * footnote, header, column/section definition, object) and every tab takes 8
+ * units, other characters one UTF-16 unit. The IR text has one character per
+ * glyph and its own characters for footnote numbers and paragraph numbers, so
+ * the saved positions are mapped onto it. */
+typedef struct {
+    uint32_t stream;
+    int32_t shift; /* stream - IR position from here on */
+} pos_mark;
+
+typedef struct {
+    pos_mark *v;
+    size_t n, cap;
+    uint32_t stream, chars;
+} pos_track;
+
+static uint32_t utf16_units(const char *s) {
+    uint32_t n = 0;
+    for (; s && *s; s++) {
+        unsigned char c = (unsigned char)*s;
+        if ((c & 0xC0) != 0x80) {
+            n += c >= 0xF0 ? 2 : 1;
+        }
+    }
+    return n;
+}
+
+static uint32_t para_units(const hp_paragraph *para) {
+    uint32_t n = 0;
+    size_t i;
+    for (i = 0; i < para->run_count; i++) {
+        n += utf16_units(para->runs[i].text);
+    }
+    return n;
+}
+
+static void pos_advance(pos_track *t, uint32_t units, uint32_t chars) {
+    t->stream += units;
+    t->chars += chars;
+    if (units == chars) {
+        return;
+    }
+    if (t->n == t->cap) {
+        size_t cap = t->cap ? t->cap * 2 : 8;
+        pos_mark *g = (pos_mark *)realloc(t->v, cap * sizeof(*g));
+        if (!g) {
+            return; /* positions stay approximate */
+        }
+        t->v = g;
+        t->cap = cap;
+    }
+    t->v[t->n].stream = t->stream;
+    t->v[t->n].shift = (int32_t)(t->stream - t->chars);
+    t->n++;
+}
+
+/* units of one <hp:t> */
+static void pos_text(pos_track *t, const hp_xml_node *el) {
+    const hp_xml_node *c;
+    for (c = el->first_child; c; c = c->next) {
+        if (c->type == HP_XML_TEXT) {
+            char *s = (char *)malloc(c->text_len + 1);
+            uint32_t n;
+            if (!s) {
+                continue;
+            }
+            memcpy(s, c->text, c->text_len);
+            s[c->text_len] = '\0';
+            n = utf16_units(s);
+            free(s);
+            pos_advance(t, n, n);
+        } else if (hp_xml_is(c, "tab")) {
+            pos_advance(t, 8, 1);
+        } else if (hp_xml_is(c, "lineBreak") || hp_xml_is(c, "lb") || hp_xml_is(c, "fwSpace") ||
+                   hp_xml_is(c, "nbSpace") || hp_xml_is(c, "hyphen")) {
+            pos_advance(t, 1, 1);
+        } else {
+            char *s = element_text(c);
+            uint32_t n = utf16_units(s);
+            free(s);
+            pos_advance(t, n ? n : 8, n); /* markers without text are controls */
+        }
+    }
+}
+
+static void pos_apply(hp_line_seg *segs, size_t count, const pos_track *t) {
+    size_t i, k;
+    for (i = 0; i < count; i++) {
+        uint32_t at = segs[i].textpos;
+        int32_t shift = 0;
+        if (at == 0) {
+            continue; /* the first line starts with any paragraph number */
+        }
+        for (k = 0; k < t->n && t->v[k].stream <= at; k++) {
+            shift = t->v[k].shift;
+        }
+        segs[i].textpos = shift > 0 && (uint32_t)shift > at ? 0 : (uint32_t)((int64_t)at - shift);
+    }
+}
+
+/* ---------- paragraph numbers, notes, headers and footers (0.12.0) ---------- */
+
+/* The number or bullet 한글 shows before a paragraph with a numbered paragraph
+ * shape; advances that numbering's counters. NULL for none. */
+static char *heading_prefix(const hp_style_tables *st, long long para_pr_id, int *char_id) {
+    hp_read_state *rs = st->state;
+    const hp_para_style *ps;
+    const hp_numbering_def *nd;
+    sbuf b = {0};
+    const char *p;
+    int id, level, k, *c;
+    *char_id = -1;
+    if (!rs || para_pr_id < 0 || (size_t)para_pr_id >= st->para_count || !st->paras[para_pr_id].valid) {
+        return NULL;
+    }
+    ps = &st->paras[para_pr_id];
+    if (ps->heading_type == 3) {
+        id = ps->heading_id;
+        if ((size_t)id >= st->bullet_count || !st->bullets[id] || !st->bullets[id][0]) {
+            return NULL;
+        }
+        sb_putn(&b, st->bullets[id], strlen(st->bullets[id]));
+        sb_putn(&b, " ", 1);
+        return sb_finish(&b);
+    }
+    if (ps->heading_type != 1 && ps->heading_type != 2) {
+        return NULL;
+    }
+    id = ps->heading_type == 1 ? rs->outline_id : ps->heading_id;
+    level = ps->heading_level;
+    if (id < 0 || (size_t)id >= st->numbering_count || !st->numberings[id].valid) {
+        return NULL;
+    }
+    nd = &st->numberings[id];
+    if ((size_t)id >= rs->counter_count) {
+        int(*g)[10] = (int(*)[10])realloc(rs->counters, st->numbering_count * sizeof(*g));
+        if (!g) {
+            return NULL;
+        }
+        memset(g + rs->counter_count, 0, (st->numbering_count - rs->counter_count) * sizeof(*g));
+        rs->counters = g;
+        rs->counter_count = st->numbering_count;
+    }
+    c = rs->counters[id];
+    c[level] = c[level] ? c[level] + 1 : nd->start[level];
+    for (k = level + 1; k < 10; k++) {
+        c[k] = 0;
+    }
+    if (!nd->format[level]) {
+        return NULL;
+    }
+    /* "^n" is level n's number; '^' before anything else is dropped */
+    for (p = nd->format[level]; *p;) {
+        if (*p == '^') {
+            p++;
+            if (*p >= '1' && *p <= '9') {
+                int lv = *p++ - '0';
+                if (lv == 1 && *p == '0') {
+                    lv = 10;
+                    p++;
+                }
+                format_number(&b, c[lv - 1] ? c[lv - 1] : nd->start[lv - 1], nd->num_format[lv - 1]);
+            }
+            continue;
+        }
+        sb_putn(&b, p, 1);
+        p++;
+    }
+    if (!b.len) {
+        free(b.s);
+        return NULL;
+    }
+    sb_putn(&b, " ", 1); /* the gap before the text (textOffset) */
+    *char_id = nd->char_id[level];
+    return sb_finish(&b);
+}
+
+/* Put the paragraph number first; saved lines after the first move with it. */
+static hp_status add_heading_prefix(hp_paragraph *para, const hp_xml_node *p, const hp_style_tables *st,
+                                    long long para_pr_id, pos_track *pt) {
+    int char_id;
+    char *prefix = heading_prefix(st, para_pr_id, &char_id);
+    hp_status rc;
+    if (!prefix) {
+        return HP_OK;
+    }
+    para->generated_prefix = utf16_units(prefix);
+    pos_advance(pt, 0, para->generated_prefix);
+    rc = add_run(para, prefix, st,
+                 char_id >= 0 && (size_t)char_id < st->char_count && st->chars[char_id].valid
+                     ? char_id
+                     : attr_l(hp_xml_child(p, "run"), "charPrIDRef", 0));
+    return rc;
+}
+
+static hp_status parse_cell_paragraph(const hp_xml_node *p, const hp_style_tables *st, hp_paragraph *out);
+
+static void note_marker(sbuf *b, const hp_note_format *f, int number) {
+    sb_putn(b, f->prefix, strlen(f->prefix));
+    format_number(b, number, f->num_format);
+    sb_putn(b, f->suffix, strlen(f->suffix));
+}
+
+/* Paragraphs of a header, footer or note (<hp:subList>), text only. */
+static hp_status parse_subtext(const hp_xml_node *el, const hp_style_tables *st, hp_subtext *sub) {
+    const hp_xml_node *list = hp_xml_child(el, "subList"), *p;
+    const char *va = hp_xml_attr(list, "vertAlign");
+    sub->vert_align = !va ? 0 : !strcmp(va, "CENTER") ? 1 : !strcmp(va, "BOTTOM") ? 2 : 0;
+    for (p = hp_xml_child(list, "p"); p; p = hp_xml_next(p, "p")) {
+        hp_paragraph q, *g;
+        if (parse_cell_paragraph(p, st, &q) != HP_OK) {
+            return HP_ERR_NOMEM;
+        }
+        g = (hp_paragraph *)realloc(sub->paragraphs, (sub->paragraph_count + 1) * sizeof(*g));
+        if (!g) {
+            paragraph_release(&q);
+            return HP_ERR_NOMEM;
+        }
+        sub->paragraphs = g;
+        sub->paragraphs[sub->paragraph_count++] = q;
+    }
+    return HP_OK;
+}
+
+static hp_status add_subtext(hp_section *sec, hp_subtext *sub) {
+    hp_subtext *g = (hp_subtext *)realloc(sec->subtexts, (sec->subtext_count + 1) * sizeof(*g));
+    if (!g) {
+        size_t i;
+        for (i = 0; i < sub->paragraph_count; i++) {
+            paragraph_release(&sub->paragraphs[i]);
+        }
+        free(sub->paragraphs);
+        return HP_ERR_NOMEM;
+    }
+    sec->subtexts = g;
+    sec->subtexts[sec->subtext_count++] = *sub;
+    return HP_OK;
+}
+
+/* One control inside <hp:ctrl>: footnote / endnote (number in the text, note
+ * text kept aside), header / footer, automatic number. */
+static hp_status add_control(hp_paragraph *para, const hp_xml_node *e, const hp_style_tables *st, long long char_id) {
+    hp_read_state *rs = st->state;
+    if (!rs) {
+        return HP_OK;
+    }
+    if (hp_xml_is(e, "footNote") || hp_xml_is(e, "endNote")) {
+        long long n = attr_l(e, "number", 0);
+        int number = n > 0 && n < 100000 ? (int)n : rs->note_count + 1, saved = rs->current_note;
+        sbuf b = {0};
+        hp_subtext sub;
+        hp_status rc;
+        if (number > rs->note_count) {
+            rs->note_count = number;
+        }
+        note_marker(&b, &rs->footnote, number);
+        rc = add_run(para, sb_finish(&b), st, char_id);
+        if (rc != HP_OK || !rs->sec) {
+            return rc;
+        }
+        /* endnotes are shown as footnotes for now (on the page of the reference) */
+        memset(&sub, 0, sizeof(sub));
+        sub.kind = HP_SUB_FOOTNOTE;
+        sub.block = rs->sec->block_count;
+        rs->current_note = number;
+        rc = parse_subtext(e, st, &sub);
+        rs->current_note = saved;
+        return rc == HP_OK ? add_subtext(rs->sec, &sub) : rc;
+    }
+    if (hp_xml_is(e, "header") || hp_xml_is(e, "footer")) {
+        const char *apply = hp_xml_attr(e, "applyPageType");
+        hp_subtext sub;
+        hp_status rc;
+        if (!rs->sec) {
+            return HP_OK;
+        }
+        memset(&sub, 0, sizeof(sub));
+        sub.kind = hp_xml_is(e, "header") ? HP_SUB_HEADER : HP_SUB_FOOTER;
+        sub.apply = !apply ? 0 : !strcmp(apply, "EVEN") ? 1 : !strcmp(apply, "ODD") ? 2 : 0;
+        sub.block = rs->sec->block_count;
+        rc = parse_subtext(e, st, &sub);
+        return rc == HP_OK ? add_subtext(rs->sec, &sub) : rc;
+    }
+    if (hp_xml_is(e, "autoNum")) {
+        const char *type = hp_xml_attr(e, "numType");
+        if (type && (!strcmp(type, "PAGE") || !strcmp(type, "TOTAL_PAGE"))) {
+            hp_status rc = add_run(para, hp_strdup("1"), st, char_id);
+            if (rc == HP_OK) {
+                para->runs[para->run_count - 1].field = !strcmp(type, "PAGE") ? 1 : 2;
+            }
+            return rc;
+        }
+        if (type && (!strcmp(type, "FOOTNOTE") || !strcmp(type, "ENDNOTE")) && rs->current_note > 0) {
+            sbuf b = {0};
+            note_marker(&b, &rs->footnote, rs->current_note);
+            return add_run(para, sb_finish(&b), st, char_id);
+        }
+    }
+    return HP_OK;
+}
+
+/* A run child that is a control holder: each control counts 8 saved units. */
+static hp_status add_ctrl(hp_paragraph *para, const hp_xml_node *ctrl, const hp_style_tables *st, long long char_id,
+                          pos_track *pt) {
+    const hp_xml_node *e;
+    for (e = hp_xml_child(ctrl, NULL); e; e = hp_xml_next(e, NULL)) {
+        uint32_t before = para_units(para);
+        hp_status rc = add_control(para, e, st, char_id);
+        if (rc != HP_OK) {
+            return rc;
+        }
+        pos_advance(pt, 8, para_units(para) - before);
+    }
+    return HP_OK;
 }
 
 /* ---------- objects ---------- */
@@ -951,12 +1474,48 @@ static hp_status add_child_text(hp_paragraph *para, const hp_xml_node *child, co
 
 /* Text paragraph inside a table cell (its objects are collected by
  * cell_harvest_objects). */
+/* Text of one run child, keeping the saved-position map in step. */
+static hp_status add_run_child(hp_paragraph *para, const hp_xml_node *c, const hp_style_tables *st,
+                               long long char_id, int keep_empty, int beside, pos_track *pt) {
+    uint32_t before = para_units(para), chars = pt->chars, added;
+    hp_status rc;
+    if (hp_xml_is(c, "ctrl")) {
+        return add_ctrl(para, c, st, char_id, pt);
+    }
+    if (!run_child_has_text(c)) {
+        pos_advance(pt, 8, 0); /* secPr and other controls */
+        return HP_OK;
+    }
+    rc = add_child_text(para, c, st, char_id, keep_empty, beside);
+    if (rc != HP_OK) {
+        return rc;
+    }
+    added = para_units(para) - before;
+    if (hp_xml_is(c, "t")) {
+        pos_text(pt, c);
+        if (pt->chars - chars != added) {
+            /* blank text beside an object is dropped */
+            pt->chars = chars;
+            pos_advance(pt, 0, added);
+        }
+    } else {
+        pos_advance(pt, 8, added); /* a drawing's text */
+    }
+    return HP_OK;
+}
+
 static hp_status parse_cell_paragraph(const hp_xml_node *p, const hp_style_tables *st, hp_paragraph *out) {
     hp_xml_node *run;
     int object=0,leading=1,prefix_count=0,object_count=0;size_t i;
+    pos_track pt = {0};
     memset(out, 0, sizeof(*out));
     apply_para_style(out, st, attr_l(p, "paraPrIDRef", 0));
     parse_linesegs(p, out);
+    if (add_heading_prefix(out, p, st, attr_l(p, "paraPrIDRef", 0), &pt) != HP_OK) {
+        paragraph_release(out);
+        free(pt.v);
+        return HP_ERR_NOMEM;
+    }
     for (run = hp_xml_child(p, "run"); run; run = hp_xml_next(run, "run")) {
         long long char_id = attr_l(run, "charPrIDRef", 0);
         int beside = run_has_object(run);
@@ -965,20 +1524,23 @@ static hp_status parse_cell_paragraph(const hp_xml_node *p, const hp_style_table
         for (c = hp_xml_child(run, NULL); c; c = hp_xml_next(c, NULL)) {
             if(is_object(c)) {
                 object_count++;
+                pos_advance(&pt, 8, 0);
                 if(leading && hp_xml_is(c,"tbl") && attr_l(hp_xml_child(c,"pos"),"treatAsChar",0)) {
                     out->inline_prefix_width_hwp+=attr_u32(hp_xml_child(c,"sz"),"width",0);
                     prefix_count++;
                 } else leading=0;
                 continue;
             }
-            if(!run_child_has_text(c))continue;
-            if (add_child_text(out, c, st, char_id, 1, beside) != HP_OK) {
+            if (add_run_child(out, c, st, char_id, 1, beside, &pt) != HP_OK) {
                 paragraph_release(out);
+                free(pt.v);
                 return HP_ERR_NOMEM;
             }
             if(out->run_count && !is_blank(out->runs[out->run_count-1].text))leading=0;
         }
     }
+    pos_apply(out->segs, out->seg_count, &pt);
+    free(pt.v);
     if(!out->run_count) {
         /* an empty line is as tall as its paragraph mark's character shape */
         hp_run mark;
@@ -990,11 +1552,8 @@ static hp_status parse_cell_paragraph(const hp_xml_node *p, const hp_style_table
     if(object) {
         out->object_anchor_only=1;
         for(i=0;i<out->run_count;i++)if(!is_blank(out->runs[i].text))out->object_anchor_only=0;
+        /* (the leading table's 8 saved units are mapped by pos_apply) */
         if(out->object_anchor_only || prefix_count!=1 || object_count!=1)out->inline_prefix_width_hwp=0;
-        else if(out->inline_prefix_width_hwp)for(i=0;i<out->seg_count;i++) {
-            uint32_t controls=(uint32_t)prefix_count*8;
-            if(out->segs[i].textpos>0)out->segs[i].textpos=out->segs[i].textpos>controls ? out->segs[i].textpos-controls : 0;
-        }
     }
     return HP_OK;
 }
@@ -1280,11 +1839,18 @@ static hp_status parse_section_paragraph(const hp_xml_node *p, hp_section *sec, 
     hp_status rc = HP_OK;
     int emitted = 0;
     hp_align align;
+    pos_track pt = {0};
+    hp_line_seg *segs;
+    size_t seg_count;
 
     memset(&pending, 0, sizeof(pending));
     apply_para_style(&pending, st, para_pr_id);
     parse_linesegs(p, &pending);
     align = pending.align;
+    /* the saved lines stay with the first piece (it owns them once flushed) */
+    segs = pending.segs;
+    seg_count = pending.seg_count;
+    rc = add_heading_prefix(&pending, p, st, para_pr_id, &pt);
 
     /* Run children in document order: text accumulates into the pending paragraph;
      * a table / picture / drawing / equation ends it and becomes its own block, and
@@ -1296,6 +1862,7 @@ static hp_status parse_section_paragraph(const hp_xml_node *p, hp_section *sec, 
         for (c = hp_xml_child(run, NULL); c && rc == HP_OK; c = hp_xml_next(c, NULL)) {
             if (is_object(c)) {
                 size_t ri;
+                pos_advance(&pt, 8, 0);
                 pending.object_anchor_only=pending.run_count>0;
                 for(ri=0;ri<pending.run_count;ri++)if(!is_blank(pending.runs[ri].text))pending.object_anchor_only=0;
                 rc = flush_pending(sec, &pending, st, para_pr_id, &emitted);
@@ -1318,11 +1885,15 @@ static hp_status parse_section_paragraph(const hp_xml_node *p, hp_section *sec, 
                     rc = add_object_block(sec, kind, obj);
                     emitted |= obj != NULL;
                 }
-            } else if (run_child_has_text(c)) {
-                rc = add_child_text(&pending, c, st, char_id, 0, beside);
+            } else {
+                rc = add_run_child(&pending, c, st, char_id, 0, beside, &pt);
             }
         }
     }
+    if (rc == HP_OK) {
+        pos_apply(segs, seg_count, &pt);
+    }
+    free(pt.v);
     if (rc != HP_OK) {
         paragraph_release(&pending);
         return rc;
@@ -1361,6 +1932,27 @@ static hp_status parse_section(const hp_xml_node *root, hp_section *sec, const h
         long long start=attr_l(hp_xml_child(pr,"startNum"),"page",0);
         sec->page_number_start=start>0 && start<=1000000 ? (int)start : 0;
         sec->hide_first_page_number=attr_l(hp_xml_child(pr,"visibility"),"hideFirstPageNum",0)!=0;
+        /* footnote numbers and separator (0.12.0) */
+        {
+            const hp_xml_node *fn = hp_xml_child(pr, "footNotePr"), *fmt = hp_xml_child(fn, "autoNumFormat");
+            const hp_xml_node *line = hp_xml_child(fn, "noteLine"), *gap = hp_xml_child(fn, "noteSpacing");
+            const char *type = hp_xml_attr(line, "type");
+            sec->footnote_shape.line_length_hwp = (int32_t)attr_l(line, "length", -1);
+            sec->footnote_shape.line_type = !type || strcmp(type, "NONE") != 0;
+            sec->footnote_shape.line_color = parse_color(hp_xml_attr(line, "color"));
+            sec->footnote_shape.above_hwp = attr_u32(gap, "aboveLine", 850);
+            sec->footnote_shape.below_hwp = attr_u32(gap, "belowLine", 567);
+            sec->footnote_shape.between_hwp = attr_u32(gap, "betweenNotes", 283);
+            if (st->state) {
+                hp_note_format *f = &st->state->footnote;
+                const char *pre = hp_xml_attr(fmt, "prefixChar"), *suf = hp_xml_attr(fmt, "suffixChar");
+                st->state->sec = sec;
+                st->state->outline_id = (int)attr_l(pr, "outlineShapeIDRef", 0);
+                f->num_format = number_format_code(hp_xml_attr(fmt, "type"));
+                snprintf(f->prefix, sizeof(f->prefix), "%s", pre ? pre : "");
+                snprintf(f->suffix, sizeof(f->suffix), "%s", fmt ? (suf ? suf : "") : ")");
+            }
+        }
     }
 
     pg = hp_xml_find(root, "pagePr");
@@ -1578,6 +2170,7 @@ static char *first_text(const hp_xml_node *root, const char *name, const char *d
 hp_status hp_hwpx_read_package(hp_package *pkg, hp_document **out_doc) {
     hp_document *doc = NULL;
     hp_style_tables styles;
+    hp_read_state state;
     hp_xml_doc *xml = NULL;
     const hp_package_entry *mt;
     hp_status st;
@@ -1585,6 +2178,7 @@ hp_status hp_hwpx_read_package(hp_package *pkg, hp_document **out_doc) {
     size_t section_total = 0, sec_i;
 
     memset(&styles, 0, sizeof(styles));
+    memset(&state, 0, sizeof(state));
     if (!pkg || !out_doc) {
         hp_package_free(pkg);
         return HP_ERR_INVALID;
@@ -1662,6 +2256,7 @@ hp_status hp_hwpx_read_package(hp_package *pkg, hp_document **out_doc) {
     if (st != HP_OK) {
         goto fail;
     }
+    styles.state = &state;
 
     /* sections */
     for (sec_i = 0; sec_i < section_total; sec_i++) {
@@ -1715,6 +2310,7 @@ hp_status hp_hwpx_read_package(hp_package *pkg, hp_document **out_doc) {
         goto fail;
     }
     style_tables_free(&styles); /* bins point into pkg: free before handing pkg over */
+    free(state.counters);
     for (sec_i = 0; sec_i < section_total; sec_i++) {
         free(sections[sec_i]);
     }
@@ -1730,6 +2326,7 @@ fail:
     free(sections);
     hp_xml_free(xml);
     style_tables_free(&styles);
+    free(state.counters);
     hp_document_free(doc);
     hp_package_free(pkg);
     return st;

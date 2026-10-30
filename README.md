@@ -7,7 +7,9 @@ A lightweight Korean word processor with a C11 HWP/HWPX engine and a Windows vie
 
 > **기본 개발 환경:** Windows PowerShell / MSYS2 UCRT64 / CMake / Ninja.
 
-**현재 버전: 0.11.2** (2026-10-31) — 변경 내역은 [`CHANGELOG.md`](CHANGELOG.md)
+**현재 버전: 0.12.0** (2026-10-31) — 변경 내역은 [`CHANGELOG.md`](CHANGELOG.md)
+
+0.12.0은 **머리말·꼬리말**(쪽 번호 필드, 홀짝 쪽 구별), **각주**(본문 번호와 쪽 아래 구분선·내용), **문단 번호·글머리표·개요 번호**를 표시합니다.
 
 0.11.2는 편집·서식 저장 때 탭(너비·채움 점선)과 전각 공백을 보존하고, HWP 변환본에 각주/미주 모양·쪽 테두리·표 셀 영역·대체 글꼴·글꼴 종류(HFT)를 넣습니다.
 
@@ -208,7 +210,9 @@ See [`NOTICE`](NOTICE) for the Hancom HWP / OWPML attribution placeholder requir
 
 - Binary HWP write (HWP documents are saved as HWPX)
 - Typing directly on the page (0.11.0: click on the page to place the caret, type in the edit box; formats apply to the selected characters)
-- Styles, numbering/bullets, page setup editing, table/picture editing (menus are present, greyed)
+- Styles, numbering/bullets, page setup editing, table/picture editing (menus are present, greyed; 0.12.0 shows numbers/bullets, editing them is not yet possible)
+- Endnotes at the end of the document (0.12.0 shows them like footnotes), objects inside headers/footers and notes, superscript note numbers
+- HWPML (한/글 XML, e.g. 국가법령정보센터 downloads)
 
 
 
