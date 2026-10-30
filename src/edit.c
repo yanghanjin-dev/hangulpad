@@ -35,7 +35,8 @@ static void escape(buffer *b,const char *s,const char *qname){
     default:putn(b,(const char *)p,1);break;
     }
 }
-typedef struct {size_t section;hp_xml_node *p;const unsigned char *source;char *original,*text;int deleted,inserted,simple;hp_char_format cf;hp_para_format pf;} item;
+typedef struct {size_t start,end;hp_char_format cf;} span; /* character format on bytes [start,end) of the item text */
+typedef struct {size_t section;hp_xml_node *p;const unsigned char *source;char *original,*text;int deleted,inserted,simple;hp_char_format cf;hp_para_format pf;span *spans;size_t span_count;} item;
 /* header: Contents/header.xml parsed once (character/paragraph shapes for formatting). */
 struct hp_editor {hp_document *doc;hp_xml_doc **xml;item *items;size_t count;hp_xml_doc *header;const char *header_name;};
 size_t hp_editor_count(const hp_editor *e){return e?e->count:0;}
@@ -43,7 +44,7 @@ const char *hp_editor_text(const hp_editor *e,size_t i){return e&&i<e->count?e->
 size_t hp_editor_section(const hp_editor *e,size_t i){return e&&i<e->count?e->items[i].section:0;}
 int hp_editor_is_deleted(const hp_editor *e,size_t i){return e&&i<e->count?e->items[i].deleted:1;}
 int hp_editor_can_delete(const hp_editor *e,size_t i){return e&&i<e->count&&e->items[i].simple;}
-void hp_editor_free(hp_editor *e){size_t i;if(!e)return;for(i=0;i<e->count;i++){free(e->items[i].text);free(e->items[i].original);}for(i=0;e->xml&&i<e->doc->section_count;i++)hp_xml_free(e->xml[i]);free(e->xml);hp_xml_free(e->header);free(e->items);hp_document_free(e->doc);free(e);}
+void hp_editor_free(hp_editor *e){size_t i;if(!e)return;for(i=0;i<e->count;i++){free(e->items[i].text);free(e->items[i].original);free(e->items[i].spans);}for(i=0;e->xml&&i<e->doc->section_count;i++)hp_xml_free(e->xml[i]);free(e->xml);hp_xml_free(e->header);free(e->items);hp_document_free(e->doc);free(e);}
 hp_status hp_editor_open(const char *path,hp_editor **out){
     hp_editor *e=calloc(1,sizeof(*e));size_t si;hp_status st;if(!out||!path){free(e);return HP_ERR_INVALID;}*out=NULL;if(!e)return HP_ERR_NOMEM;
     st=hp_document_read(path,&e->doc);if(st!=HP_OK){hp_editor_free(e);return st;}
@@ -72,18 +73,41 @@ hp_status hp_editor_open(const char *path,hp_editor **out){
     }
     *out=e;return HP_OK;
 }
+/* Keep character ranges on the same characters across a text change: the
+ * common prefix and suffix stay, the changed middle maps to its replacement. */
+static void move_spans(item *it,const char *old_text,const char *new_text){
+    size_t pre=0,suf=0,old=strlen(old_text),now=strlen(new_text),k,w=0;
+    if(!it->span_count)return;
+    while(pre<old&&pre<now&&old_text[pre]==new_text[pre])pre++;
+    while(pre&&((unsigned char)old_text[pre]&192)==128)pre--;
+    while(suf<old-pre&&suf<now-pre&&old_text[old-1-suf]==new_text[now-1-suf])suf++;
+    while(suf&&((unsigned char)old_text[old-suf]&192)==128)suf--;
+    for(k=0;k<it->span_count;k++){
+        span sp=it->spans[k];
+        size_t *ends[2]={&sp.start,&sp.end};int j;
+        for(j=0;j<2;j++){
+            size_t x=*ends[j];
+            if(x<=pre){}
+            else if(x>=old-suf)x=x-(old-suf)+(now-suf);
+            else x=j?now-suf:pre; /* inside the replaced text: cover all of the replacement */
+            *ends[j]=x;
+        }
+        if(sp.end>sp.start)it->spans[w++]=sp;
+    }
+    it->span_count=w;
+}
 hp_status hp_editor_set(hp_editor *e,size_t i,const char *text){char *s;const unsigned char *p;if(!e||i>=e->count||!text)return HP_ERR_INVALID;
     for(p=(const unsigned char *)text;*p;p++)if(*p<32&&*p!='\n'&&*p!='\t'&&*p!='\r')return HP_ERR_INVALID;
     {hp_xml_node *r,*t,*ch;
         for(r=hp_xml_child(e->items[i].p,"run");r;r=hp_xml_next(r,"run"))for(t=hp_xml_child(r,"t");t;t=hp_xml_next(t,"t"))for(ch=t->first_child;ch;ch=ch->next)
             if(ch->type==HP_XML_ELEMENT&&!hp_xml_is(ch,"lineBreak")&&!hp_xml_is(ch,"tab")&&!hp_xml_is(ch,"fwSpace")&&!hp_xml_is(ch,"nbSpace"))return HP_ERR_UNSUPPORTED;
     }
-    s=copy(text);if(!s)return HP_ERR_NOMEM;free(e->items[i].text);e->items[i].text=s;return HP_OK;}
+    s=copy(text);if(!s)return HP_ERR_NOMEM;move_spans(&e->items[i],e->items[i].text,s);free(e->items[i].text);e->items[i].text=s;return HP_OK;}
 hp_status hp_editor_insert(hp_editor *e,size_t i,size_t *inserted_index){item it,*arr;size_t at;if(!e||i>=e->count)return HP_ERR_INVALID;
     /* Anchor new plain paragraphs after the source paragraph; controls stay in place. */
     at=i+1;
     if(!e->items[i].inserted)while(at<e->count&&e->items[at].section==e->items[i].section&&e->items[at].p->start>e->items[i].p->start&&e->items[at].p->start<e->items[i].p->end)at++;
-    it=e->items[i];it.original=copy("");it.text=copy("");it.inserted=1;it.deleted=0;it.simple=1;
+    it=e->items[i];it.original=copy("");it.text=copy("");it.inserted=1;it.deleted=0;it.simple=1;it.spans=NULL;it.span_count=0;
     if(!it.original||!it.text){free(it.original);free(it.text);return HP_ERR_NOMEM;}
     arr=realloc(e->items,(e->count+1)*sizeof(*arr));if(!arr){free(it.original);free(it.text);return HP_ERR_NOMEM;}
     e->items=arr;memmove(arr+at+1,arr+at,(e->count-at)*sizeof(*arr));arr[at]=it;e->count++;if(inserted_index)*inserted_index=at;return HP_OK;
@@ -392,6 +416,132 @@ hp_status hp_editor_apply_para_format(hp_editor *e, size_t i, const hp_para_form
     return HP_OK;
 }
 
+
+static size_t utf8_floor(const char *s, size_t n, size_t at) {
+    if (at > n) {
+        at = n;
+    }
+    while (at > 0 && at < n && ((unsigned char)s[at] & 192) == 128) {
+        at--;
+    }
+    return at;
+}
+
+static size_t utf8_ceil(const char *s, size_t n, size_t at) {
+    if (at > n) {
+        at = n;
+    }
+    while (at < n && ((unsigned char)s[at] & 192) == 128) {
+        at++;
+    }
+    return at;
+}
+
+hp_status hp_editor_apply_char_format_range(hp_editor *e, size_t i, size_t start, size_t end, const hp_char_format *cf) {
+    item *it;
+    size_t n;
+    span *g;
+    hp_status st;
+    if (!e || i >= e->count || !cf || e->items[i].deleted || start >= end) {
+        return HP_ERR_INVALID;
+    }
+    it = &e->items[i];
+    n = strlen(it->text);
+    start = utf8_floor(it->text, n, start);
+    end = utf8_ceil(it->text, n, end);
+    if (start >= end) {
+        return HP_ERR_INVALID;
+    }
+    if (start == 0 && end == n) {
+        return hp_editor_apply_char_format(e, i, cf); /* the whole paragraph */
+    }
+    if (!it->simple) {
+        return HP_ERR_UNSUPPORTED;
+    }
+    {
+        /* same validation as the whole-paragraph form */
+        hp_char_format probe = it->cf;
+        st = hp_editor_apply_char_format(e, i, cf);
+        if (st != HP_OK) {
+            return st;
+        }
+        it->cf = probe;
+    }
+    g = (span *)realloc(it->spans, (it->span_count + 1) * sizeof(*g));
+    if (!g) {
+        return HP_ERR_NOMEM;
+    }
+    it->spans = g;
+    g[it->span_count].start = start;
+    g[it->span_count].end = end;
+    g[it->span_count].cf = *cf;
+    it->span_count++;
+    return HP_OK;
+}
+
+hp_status hp_editor_get_format_at(const hp_editor *e, size_t i, size_t offset, hp_char_format *cf) {
+    const item *it;
+    const hp_xml_node *root, *run, *t, *found = NULL;
+    size_t k, pos = 0;
+    if (!e || i >= e->count || !cf) {
+        return HP_ERR_INVALID;
+    }
+    if (!e->header) {
+        return HP_ERR_UNSUPPORTED;
+    }
+    it = &e->items[i];
+    root = hp_xml_root(e->header);
+    /* the source run holding this offset (original text) */
+    for (run = hp_xml_child(it->p, "run"); run && !found; run = hp_xml_next(run, "run")) {
+        for (t = hp_xml_child(run, "t"); t; t = hp_xml_next(t, "t")) {
+            buffer b = {0};
+            char *s;
+            size_t len;
+            text_of(&b, t);
+            s = finish(&b);
+            len = s ? strlen(s) : 0;
+            free(s);
+            if (offset < pos + len || (offset == pos + len && offset > 0 && !found)) {
+                found = run;
+            }
+            pos += len;
+        }
+    }
+    {
+        hp_status st = hp_editor_get_format(e, i, cf, NULL);
+        const hp_xml_node *cp;
+        if (st != HP_OK) {
+            return st;
+        }
+        if (found && (cp = by_id(root, "charPr", hp_xml_attr(found, "charPrIDRef") ? hp_xml_attr(found, "charPrIDRef") : "0"))) {
+            hp_char_format base;
+            const hp_xml_node *u = hp_xml_child(cp, "underline"), *so = hp_xml_child(cp, "strikeout");
+            const hp_xml_node *ref = hp_xml_child(cp, "fontRef");
+            const char *ut = hp_xml_attr(u, "type"), *ss = hp_xml_attr(so, "shape"), *sc = hp_xml_attr(so, "color");
+            const char *face = font_face(root, "HANGUL", ref ? hp_xml_attr(ref, "hangul") : "0");
+            memset(&base, 0, sizeof(base));
+            base.size_hwp = (uint32_t)hp_xml_attr_ulong(cp, "height", 1000);
+            base.color_rgb = parse_rgb(hp_xml_attr(cp, "textColor"));
+            base.bold = hp_xml_child(cp, "bold") != NULL;
+            base.italic = hp_xml_child(cp, "italic") != NULL;
+            base.underline = ut && strcmp(ut, "NONE") != 0;
+            base.strikeout = ss && strcmp(ss, "SOLID") == 0 && sc && strcmp(sc, "none") != 0;
+            if (face) {
+                snprintf(base.face, sizeof(base.face), "%s", face);
+            }
+            base.fields = cf->fields;
+            overlay_char(&base, &it->cf);
+            *cf = base;
+        }
+    }
+    for (k = 0; k < it->span_count; k++) {
+        if (it->spans[k].start <= offset && (offset < it->spans[k].end || (offset == it->spans[k].end && offset > it->spans[k].start))) {
+            overlay_char(cf, &it->spans[k].cf);
+        }
+    }
+    return HP_OK;
+}
+
 /* ---- string surgery on XML text ---- */
 
 /* Start tag of the next element with this local name at or after `from`,
@@ -587,6 +737,153 @@ static unsigned count_children(const hp_xml_node *root, const char *container, c
     return want_next ? next : k;
 }
 
+/* Range formats (0.11.0): a simple paragraph's runs are rewritten as one run per
+ * stretch of text with the same source shape and the same requested format. */
+static hp_status rebuild_runs(const char *xml, const hp_xml_node *p, const item *it, shape_reg *reg, patch **ps,
+                              size_t *np) {
+    const hp_xml_node *r, *first = NULL, *last = NULL, *sample_t = NULL;
+    buffer text = {0}, out = {0}, tail = {0};
+    const hp_xml_node **owner = NULL;
+    size_t len = 0, cap = 0, i, k;
+    char *all, *rq = NULL, *tq = NULL;
+    hp_status st = HP_OK;
+    for (r = hp_xml_child(p, "run"); r; r = hp_xml_next(r, "run")) {
+        const hp_xml_node *t;
+        size_t before = text.n;
+        if (!first) {
+            first = r;
+        }
+        last = r;
+        for (t = hp_xml_child(r, "t"); t; t = hp_xml_next(t, "t")) {
+            if (!sample_t) {
+                sample_t = t;
+            }
+            text_of(&text, t);
+        }
+        if (text.failed) {
+            free(text.s);
+            free(owner);
+            return HP_ERR_NOMEM;
+        }
+        if (text.n > cap) {
+            const hp_xml_node **g = (const hp_xml_node **)realloc(owner, text.n * sizeof(*g));
+            if (!g) {
+                free(text.s);
+                free(owner);
+                return HP_ERR_NOMEM;
+            }
+            owner = g;
+            cap = text.n;
+        }
+        for (i = before; i < text.n; i++) {
+            owner[i] = r;
+        }
+        if (text.n == before && text.n > 0) {
+            /* a run without text after the text (paragraph-mark shape): keep it */
+            putn(&tail, xml + r->start, r->end - r->start);
+        }
+    }
+    len = text.n;
+    all = text.s;
+    if (!first || !len) {
+        free(all);
+        free(owner);
+        free(tail.s);
+        return HP_OK;
+    }
+    {
+        buffer q = {0};
+        puts_b(&q, first->qname);
+        rq = finish(&q);
+        memset(&q, 0, sizeof(q));
+        if (sample_t) {
+            puts_b(&q, sample_t->qname);
+        } else {
+            qualified(&q, first->qname, "t");
+        }
+        tq = finish(&q);
+    }
+    for (i = 0; i < len && st == HP_OK && rq && tq;) {
+        hp_char_format want = it->cf, next_want;
+        size_t j;
+        const char *base = hp_xml_attr(owner[i], "charPrIDRef");
+        unsigned id;
+        char num[16];
+        for (k = 0; k < it->span_count; k++) {
+            if (it->spans[k].start <= i && i < it->spans[k].end) {
+                overlay_char(&want, &it->spans[k].cf);
+            }
+        }
+        normalize_char(&want);
+        for (j = i + 1; j < len; j++) {
+            if (owner[j] != owner[i]) {
+                break;
+            }
+            next_want = it->cf;
+            for (k = 0; k < it->span_count; k++) {
+                if (it->spans[k].start <= j && j < it->spans[k].end) {
+                    overlay_char(&next_want, &it->spans[k].cf);
+                }
+            }
+            normalize_char(&next_want);
+            if (memcmp(&next_want, &want, sizeof(want)) != 0) {
+                break;
+            }
+        }
+        if (want.fields) {
+            if (!reg_id(reg, 0, base ? base : "0", &want, NULL, &id)) {
+                st = HP_ERR_NOMEM;
+                break;
+            }
+            snprintf(num, sizeof(num), "%u", id);
+        } else {
+            snprintf(num, sizeof(num), "%s", base ? base : "0");
+        }
+        {
+            char saved = all[j], *piece;
+            all[j] = '\0';
+            piece = all + i;
+            puts_b(&out, "<");
+            puts_b(&out, rq);
+            puts_b(&out, " charPrIDRef=\"");
+            puts_b(&out, num);
+            puts_b(&out, "\"><");
+            puts_b(&out, tq);
+            puts_b(&out, ">");
+            escape(&out, piece, tq);
+            puts_b(&out, "</");
+            puts_b(&out, tq);
+            puts_b(&out, "></");
+            puts_b(&out, rq);
+            puts_b(&out, ">");
+            all[j] = saved;
+        }
+        i = j;
+    }
+    if (st == HP_OK && (!rq || !tq)) {
+        st = HP_ERR_NOMEM;
+    }
+    if (st == HP_OK) {
+        char *t = finish(&tail);
+        if (t) {
+            puts_b(&out, t);
+        }
+        free(t);
+        memset(&tail, 0, sizeof(tail));
+        if (!add_patch(ps, np, first->start, last->end, finish(&out))) {
+            st = HP_ERR_NOMEM;
+        }
+        memset(&out, 0, sizeof(out));
+    }
+    free(out.s);
+    free(tail.s);
+    free(all);
+    free(owner);
+    free(rq);
+    free(tq);
+    return st;
+}
+
 /* Second pass over one patched section: point formatted paragraphs and their runs
  * at new shapes. `xml` is replaced on success. */
 static hp_status format_section(hp_editor *e, size_t si, char **xml, shape_reg *reg) {
@@ -597,7 +894,8 @@ static hp_status format_section(hp_editor *e, size_t si, char **xml, shape_reg *
     buffer b = {0};
     hp_status st;
     for (k = 0; k < e->count; k++) {
-        if (e->items[k].section == si && !e->items[k].deleted && (e->items[k].cf.fields || e->items[k].pf.fields)) {
+        if (e->items[k].section == si && !e->items[k].deleted &&
+            (e->items[k].cf.fields || e->items[k].pf.fields || e->items[k].span_count)) {
             any = 1;
         }
     }
@@ -620,7 +918,7 @@ static hp_status format_section(hp_editor *e, size_t si, char **xml, shape_reg *
             break;
         }
         it = &e->items[j++];
-        if (!it->cf.fields && !it->pf.fields) {
+        if (!it->cf.fields && !it->pf.fields && !it->span_count) {
             continue;
         }
         if (it->pf.fields) {
@@ -648,7 +946,11 @@ static hp_status format_section(hp_editor *e, size_t si, char **xml, shape_reg *
                 }
             }
         }
-        for (r = hp_xml_child(p, "run"); r && it->cf.fields && st == HP_OK; r = hp_xml_next(r, "run")) {
+        if (it->span_count && it->simple) {
+            st = rebuild_runs(*xml, p, it, reg, &ps, &n);
+        }
+        for (r = hp_xml_child(p, "run"); r && it->cf.fields && !(it->span_count && it->simple) && st == HP_OK;
+             r = hp_xml_next(r, "run")) {
             const char *base = hp_xml_attr(r, "charPrIDRef");
             unsigned id;
             char num[16], *tag;
