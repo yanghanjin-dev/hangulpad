@@ -58,6 +58,8 @@ enum {
     TAG_CTRL_HEADER = 0x47,
     TAG_LIST_HEADER = 0x48,
     TAG_PAGE_DEF = 0x49,
+    TAG_FOOTNOTE_SHAPE = 0x4A,
+    TAG_PAGE_BORDER_FILL = 0x4B,
     TAG_SHAPE_COMPONENT = 0x4C,
     TAG_TABLE = 0x4D,
     TAG_SC_PICTURE = 0x55,
@@ -845,6 +847,42 @@ static void emit_style(xb *b, unsigned id, const rec *rc) {
        chr, next, lang);
 }
 
+/* FACE_NAME: properties (bit 7 substitute font, bit 6 type information,
+ * bits 0-1 font kind 1 TTF / 2 HFT), name, substitute (kind + name), 10
+ * PANOSE-style type bytes. 한글 needs the substitute when the font is
+ * missing and the kind to tell HFT fonts from TrueType ones. 0.11.2 */
+static void emit_font(xb *b, uint32_t id, rd *r) {
+    static const char *const kinds[] = {"TTF", "TTF", "HFT", "TTF"};
+    static const char *const families[] = {"FCAT_UNKNOWN",     "FCAT_MYUNGJO",   "FCAT_GOTHIC",  "FCAT_SSERIF",
+                                           "FCAT_BRUSHSCRIPT", "FCAT_DECORATIVE", "FCAT_NONRECTMJ", "FCAT_NONRECTGT"};
+    unsigned props = r8(r);
+    xf(b, "<hh:font id=\"%u\" face=\"", (unsigned)id);
+    x_hwpstr(b, r);
+    xf(b, "\" type=\"%s\" isEmbedded=\"0\"", kinds[props & 3]);
+    if (!(props & 0xC0) || r->bad) {
+        xs(b, "/>");
+        return;
+    }
+    xs(b, ">");
+    if (props & 0x80) {
+        unsigned kind = r8(r);
+        xs(b, "<hh:substFont face=\"");
+        x_hwpstr(b, r);
+        xf(b, "\" type=\"%s\" isEmbedded=\"0\" binaryItemIDRef=\"\"/>", kinds[kind & 3]);
+    }
+    if ((props & 0x40) && rd_have(r, 10)) {
+        unsigned v[10], k;
+        for (k = 0; k < 10; k++) {
+            v[k] = r8(r);
+        }
+        /* v[1] (serif style) has no HWPX attribute */
+        xf(b, "<hh:typeInfo familyType=\"%s\" weight=\"%u\" proportion=\"%u\" contrast=\"%u\" strokeVariation=\"%u\" "
+              "armStyle=\"%u\" letterform=\"%u\" midline=\"%u\" xHeight=\"%u\"/>",
+           PICK(families, v[0]), v[2], v[3], v[4], v[5], v[6], v[7], v[8], v[9]);
+    }
+    xs(b, "</hh:font>");
+}
+
 static unsigned count_tag(const recs *di, unsigned tag) {
     size_t i;
     unsigned n = 0;
@@ -960,10 +998,7 @@ static hp_status emit_header(ctx *c, const recs *di, unsigned section_count, xb 
                     continue;
                 }
                 r = rd_make(di->r[fi].data, di->r[fi].size);
-                (void)r8(&r);
-                xf(b, "<hh:font id=\"%u\" face=\"", (unsigned)id);
-                x_hwpstr(b, &r);
-                xs(b, "\" type=\"TTF\" isEmbedded=\"0\"/>");
+                emit_font(b, id, &r);
                 id++;
                 face_index++;
             }
@@ -1145,7 +1180,7 @@ static void emit_table(ctx *c, const recs *rs, size_t ci) {
     const rec *ch = &rs->r[ci];
     common_obj o;
     size_t j, table_rec = (size_t)-1, caption = (size_t)-1;
-    rd t;
+    rd t, zones;
     uint32_t tprops;
     unsigned rows, cols, spacing, pad[4], border, row, *per_row = NULL;
     read_common(ch, &o);
@@ -1177,6 +1212,7 @@ static void emit_table(ctx *c, const recs *rs, size_t ci) {
         }
     }
     border = r16(&t);
+    zones = t; /* cell zones (5.0.1.0+): count, then start row/col, end row/col, border fill */
     xs(c->out, "<hp:tbl");
     emit_object_attrs(c, &o);
     xf(c->out, " pageBreak=\"%s\" repeatHeader=\"%d\" rowCnt=\"%u\" colCnt=\"%u\" cellSpacing=\"%u\" "
@@ -1187,6 +1223,19 @@ static void emit_table(ctx *c, const recs *rs, size_t ci) {
         emit_caption(c, rs, caption, ch->end);
     }
     xf(c->out, "<hp:inMargin left=\"%u\" right=\"%u\" top=\"%u\" bottom=\"%u\"/>", pad[0], pad[1], pad[2], pad[3]);
+    if (rd_have(&zones, 2)) {
+        unsigned n = r16(&zones), z;
+        if (n && rd_have(&zones, 10 * (size_t)n)) {
+            xs(c->out, "<hp:cellzoneList>");
+            for (z = 0; z < n; z++) {
+                unsigned sr = r16(&zones), sc = r16(&zones), er = r16(&zones), ec = r16(&zones), bf = r16(&zones);
+                xf(c->out, "<hp:cellzone startRowAddr=\"%u\" startColAddr=\"%u\" endRowAddr=\"%u\" endColAddr=\"%u\" "
+                           "borderFillIDRef=\"%u\"/>",
+                   sr, sc, er, ec, bf_ref(c, bf));
+            }
+            xs(c->out, "</hp:cellzoneList>");
+        }
+    }
     /* cells: LIST_HEADER siblings after the TABLE record, grouped per row */
     {
         unsigned in_row = 0, cur_row = 0;
@@ -1549,6 +1598,74 @@ static void emit_equation(ctx *c, const recs *rs, size_t ci) {
     }
 }
 
+/* FOOTNOTE_SHAPE: attributes, user/prefix/suffix characters, start number,
+ * separator length, space above/below the separator and between notes,
+ * separator line type/width/color. 0.11.2 */
+static void emit_note_shape(xb *b, const rec *rc, int endnote) {
+    static const char *const foot_places[] = {"EACH_COLUMN", "MERGED_COLUMN", "RIGHT_MOST_COLUMN", "EACH_COLUMN"};
+    static const char *const end_places[] = {"END_OF_DOCUMENT", "END_OF_SECTION", "END_OF_DOCUMENT", "END_OF_DOCUMENT"};
+    static const char *const numberings[] = {"CONTINUOUS", "ON_SECTION", "ON_PAGE", "CONTINUOUS"};
+    rd r = rd_make(rc->data, rc->size);
+    uint32_t props = r32(&r), color;
+    unsigned chars[3], start, above, below, between, type, width, k;
+    int32_t length;
+    const char *const names[3] = {"userChar", "prefixChar", "suffixChar"};
+    for (k = 0; k < 3; k++) {
+        chars[k] = r16(&r);
+    }
+    start = r16(&r);
+    length = (int32_t)r32(&r);
+    above = r16(&r);
+    below = r16(&r);
+    between = r16(&r);
+    type = r8(&r);
+    width = r8(&r);
+    color = r32(&r);
+    xs(b, endnote ? "<hp:endNotePr>" : "<hp:footNotePr>");
+    xf(b, "<hp:autoNumFormat type=\"%s\"", num_format(props & 0xFF));
+    for (k = 0; k < 3; k++) {
+        xf(b, " %s=\"", names[k]);
+        if (chars[k]) {
+            x_char(b, chars[k]);
+        }
+        xs(b, "\"");
+    }
+    xf(b, " supscript=\"%d\"/>", (int)((props >> 12) & 1));
+    xf(b, "<hp:noteLine length=\"%d\" type=\"%s\" width=\"%s\" color=\"", (int)length, PICK(LINE_TYPE, type),
+       PICK(LINE_WIDTH, width & 0x0F));
+    x_color(b, color);
+    xf(b, "\"/><hp:noteSpacing betweenNotes=\"%u\" belowLine=\"%u\" aboveLine=\"%u\"/>", between, below, above);
+    xf(b, "<hp:numbering type=\"%s\" newNum=\"%u\"/>", numberings[(props >> 10) & 3], start ? start : 1u);
+    xf(b, "<hp:placement place=\"%s\" beneathText=\"%d\"/>",
+       endnote ? end_places[(props >> 8) & 3] : foot_places[(props >> 8) & 3], (int)((props >> 13) & 1));
+    xs(b, endnote ? "</hp:endNotePr>" : "</hp:footNotePr>");
+}
+
+/* PAGE_BORDER_FILL (both/even/odd pages). 한글 writes its defaults for the
+ * unused (all-zero) records. 0.11.2 */
+static void emit_page_border(ctx *c, const rec *rc, unsigned which) {
+    static const char *const types[] = {"BOTH", "EVEN", "ODD"};
+    static const char *const areas[] = {"PAPER", "PAGE", "BORDER", "PAPER"};
+    rd r = rd_make(rc->data, rc->size);
+    uint32_t props = r32(&r);
+    unsigned m[4], bf, k, used = props != 0;
+    for (k = 0; k < 4; k++) {
+        m[k] = r16(&r);
+        used |= m[k] != 0;
+    }
+    bf = r16(&r);
+    used |= bf != 0;
+    if (!used) {
+        props = 1;
+        m[0] = m[1] = m[2] = m[3] = 1417;
+    }
+    xf(c->out, "<hp:pageBorderFill type=\"%s\" borderFillIDRef=\"%u\" textBorder=\"%s\" headerInside=\"%d\" "
+               "footerInside=\"%d\" fillArea=\"%s\"><hp:offset left=\"%u\" right=\"%u\" top=\"%u\" bottom=\"%u\"/>"
+               "</hp:pageBorderFill>",
+       types[which], bf ? bf_ref(c, bf) : 1u, (props & 1) ? "PAPER" : "CONTENT", (int)((props >> 1) & 1),
+       (int)((props >> 2) & 1), areas[(props >> 3) & 3], m[0], m[1], m[2], m[3]);
+}
+
 static void emit_secd(ctx *c, const recs *rs, size_t ci) {
     const rec *ch = &rs->r[ci];
     rd r = rd_make(ch->data, ch->size);
@@ -1577,6 +1694,7 @@ static void emit_secd(ctx *c, const recs *rs, size_t ci) {
                "fill=\"%s\" hideFirstPageNum=\"%d\" hideFirstEmptyLine=\"%d\" showLineNumber=\"0\"/>",
        (int)(props & 1), (int)((props >> 1) & 1), (int)((props >> 2) & 1), (props >> 3) & 1 ? "HIDE_FIRST" : "SHOW_ALL",
        (props >> 4) & 1 ? "HIDE_FIRST" : "SHOW_ALL", (int)((props >> 5) & 1), (int)((props >> 19) & 1));
+    xs(c->out, "<hp:lineNumberShape restartType=\"0\" countBy=\"0\" distance=\"0\" startNumber=\"0\"/>");
     for (j = ci + 1; j < ch->end; j = rs->r[j].end > j ? rs->r[j].end : j + 1) {
         if (rs->r[j].tag == TAG_PAGE_DEF) {
             rd p = rd_make(rs->r[j].data, rs->r[j].size);
@@ -1594,6 +1712,20 @@ static void emit_secd(ctx *c, const recs *rs, size_t ci) {
                (unsigned)v[6], (unsigned)v[7], (unsigned)v[8], (unsigned)v[2], (unsigned)v[3], (unsigned)v[4],
                (unsigned)v[5]);
             break;
+        }
+    }
+    /* footnote/endnote shapes, then page borders (both/even/odd), in record order */
+    {
+        unsigned notes = 0, borders = 0;
+        for (j = ci + 1; j < ch->end; j = rs->r[j].end > j ? rs->r[j].end : j + 1) {
+            if (rs->r[j].tag == TAG_FOOTNOTE_SHAPE && notes < 2) {
+                emit_note_shape(c->out, &rs->r[j], notes++ == 1);
+            }
+        }
+        for (j = ci + 1; j < ch->end; j = rs->r[j].end > j ? rs->r[j].end : j + 1) {
+            if (rs->r[j].tag == TAG_PAGE_BORDER_FILL && borders < 3) {
+                emit_page_border(c, &rs->r[j], borders++);
+            }
         }
     }
     xs(c->out, "</hp:secPr>");

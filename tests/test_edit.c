@@ -117,6 +117,20 @@ static int ranges(void){
     for(i=0;i<hp_editor_count(again);i++)CHECK(hp_editor_text(again,i)!=NULL);
     hp_editor_free(e);hp_editor_free(again);puts("Range character formats passed");return 0;
 }
+/* inline elements in the section parts: attributed tabs, full-width / no-break spaces, line breaks */
+static long inline_count(const char *path){
+    static const char *const tags[]={"<hp:tab ","<hp:fwSpace","<hp:nbSpace","<hp:lineBreak"};
+    hp_document *d=NULL;size_t i,k;long n=0;
+    if(hp_hwpx_read(path,&d)!=HP_OK)return -1;
+    for(i=0;i<d->package->entry_count;i++){
+        const hp_package_entry *p=&d->package->entries[i];char *s;const char *q;
+        if(!strstr(p->name,"Contents/section"))continue;
+        s=malloc(p->len+1);if(!s){n=-1;break;}memcpy(s,p->data,p->len);s[p->len]=0;
+        for(k=0;k<4;k++)for(q=strstr(s,tags[k]);q;q=strstr(q+1,tags[k]))n++;
+        free(s);
+    }
+    hp_document_free(d);return n;
+}
 static int corpus(const char *path){
     hp_editor *e=NULL,*again=NULL;size_t i,n,changed=0;char out[100],raw[100]; unsigned long key=0;const unsigned char *q=(const unsigned char *)path;for(;*q;q++)key=key*33+*q;snprintf(out,sizeof(out),"tmp/edit-corpus-%lu.hwpx",key);snprintf(raw,sizeof(raw),"tmp/edit-corpus-%lu-raw.hwpx",key);
     CHECK(hp_editor_open(path,&e)==HP_OK);n=hp_editor_count(e);CHECK(n>10);
@@ -130,6 +144,17 @@ static int corpus(const char *path){
     for(i=0;i<n;i++)CHECK(!strcmp(hp_editor_text(e,i),hp_editor_text(again,i)));
     printf("Corpus paragraphs edited and reread: %zu; unchanged package parts preserved\n",changed);
     {char fmt[100];snprintf(fmt,sizeof(fmt),"tmp/edit-corpus-%lu-fmt.hwpx",key);CHECK(formatting(out,fmt,3)==0);}
+    {   /* 0.11.2: edited and range-formatted text keeps tabs (width/leader) and full-width spaces */
+        long before=inline_count(path);char rng[100];hp_char_format cf;size_t ranged=0;
+        CHECK(before>=0);CHECK(inline_count(out)==before);
+        hp_editor_free(again);again=NULL;CHECK(hp_editor_open(path,&again)==HP_OK);
+        memset(&cf,0,sizeof cf);cf.fields=HP_CF_BOLD;cf.bold=1;
+        for(i=0;i<n;i++){size_t len=strlen(hp_editor_text(again,i));
+            if(len>2&&hp_editor_can_delete(again,i)&&hp_editor_apply_char_format_range(again,i,1,len,&cf)==HP_OK)ranged++;}
+        snprintf(rng,sizeof(rng),"tmp/edit-corpus-%lu-range.hwpx",key);
+        CHECK(ranged>10);CHECK(hp_editor_save(again,rng)==HP_OK);CHECK(inline_count(rng)==before);
+        printf("Inline tab/space elements kept: %ld (range-formatted paragraphs: %zu)\n",before,ranged);
+    }
     hp_editor_free(e);hp_editor_free(again);return 0;
 }
 int main(int argc,char **argv){

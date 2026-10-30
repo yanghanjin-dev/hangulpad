@@ -12,6 +12,7 @@
 #include "hp/hwp.h"
 #include "hp/hwpx.h"
 #include "hp/ir.h"
+#include "../src/hwpx_package.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -253,6 +254,60 @@ static unsigned char *file_header_in(unsigned char *buf, size_t len) {
     return NULL;
 }
 
+/* text of one converted part */
+static char *part_text(const hp_document *doc, const char *name) {
+    const hp_package_entry *p = hp_package_find(doc->package, name);
+    char *s;
+    if (!p) {
+        return NULL;
+    }
+    s = (char *)malloc(p->len + 1);
+    if (s) {
+        memcpy(s, p->data, p->len);
+        s[p->len] = '\0';
+    }
+    return s;
+}
+
+/* 0.11.2: section, table and font details 한글 writes into its own HWPX of the
+ * same document (values from sample/corpus/ethics.hwpx) */
+static void test_converted_details(void) {
+    char hwp[512], *head, *s0, *s1;
+    hp_document *doc = NULL;
+    corpus_path(hwp, sizeof(hwp), "ethics", "hwp");
+    EXPECT(hp_hwp_read(hwp, &doc) == HP_OK, "details: read");
+    if (!doc) {
+        return;
+    }
+    head = part_text(doc, "Contents/header.xml");
+    s0 = part_text(doc, "Contents/section0.xml");
+    s1 = part_text(doc, "Contents/section1.xml");
+    EXPECT(s0 && strstr(s0, "<hp:lineNumberShape restartType=\"0\" countBy=\"0\" distance=\"0\" startNumber=\"0\"/>"),
+           "details: line number shape");
+    EXPECT(s0 && strstr(s0, "<hp:footNotePr><hp:autoNumFormat type=\"DIGIT\" userChar=\"\" prefixChar=\"\" "
+                            "suffixChar=\")\" supscript=\"0\"/><hp:noteLine length=\"-1\" type=\"SOLID\" "
+                            "width=\"0.12 mm\" color=\"#000000\"/><hp:noteSpacing betweenNotes=\"285\" "
+                            "belowLine=\"565\" aboveLine=\"850\"/>"),
+           "details: footnote shape");
+    EXPECT(s0 && strstr(s0, "<hp:noteLine length=\"14692344\"") && strstr(s0, "place=\"END_OF_DOCUMENT\""),
+           "details: endnote shape");
+    EXPECT(s0 && strstr(s0, "<hp:pageBorderFill type=\"ODD\" borderFillIDRef=\"1\" textBorder=\"PAPER\" "
+                            "headerInside=\"0\" footerInside=\"0\" fillArea=\"PAPER\"><hp:offset left=\"1417\""),
+           "details: page border fills");
+    EXPECT(s1 && strstr(s1, "<hp:cellzone startRowAddr=\"2\" startColAddr=\"0\" endRowAddr=\"9\" endColAddr=\"6\""),
+           "details: table cell zones");
+    EXPECT(head && strstr(head, "face=\"한양신명조\" type=\"HFT\""), "details: HFT font kind");
+    EXPECT(head && strstr(head, "face=\"맑은 고딕\" type=\"TTF\" isEmbedded=\"0\"><hh:typeInfo familyType=\"FCAT_GOTHIC\" "
+                                "weight=\"5\" proportion=\"3\" contrast=\"2\" strokeVariation=\"0\" armStyle=\"0\" "
+                                "letterform=\"2\" midline=\"0\" xHeight=\"4\"/></hh:font>"),
+           "details: font type information");
+    EXPECT(head && strstr(head, "<hh:substFont face=\"한컴바탕\" type=\"TTF\""), "details: substitute font");
+    free(head);
+    free(s0);
+    free(s1);
+    hp_document_free(doc);
+}
+
 static void test_refused_and_damaged(void) {
     char hwp[512];
     size_t len, i;
@@ -333,6 +388,7 @@ int main(int argc, char **argv) {
     test_pictures_have_data();
     test_convert_to_hwpx();
     test_editor_on_hwp();
+    test_converted_details();
     test_refused_and_damaged();
     if (failures) {
         fprintf(stderr, "%d hwp test(s) failed\n", failures);

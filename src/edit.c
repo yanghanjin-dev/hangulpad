@@ -17,24 +17,45 @@ static void putn(buffer *b,const char *s,size_t n) {
 static void puts_b(buffer *b,const char *s){putn(b,s,strlen(s));}
 static char *copy(const char *s){size_t n=strlen(s)+1;char *p=malloc(n);if(p)memcpy(p,s,n);return p;}
 static char *finish(buffer *b){if(b->failed){free(b->s);return NULL;}return b->s?b->s:copy("");}
-static void text_of(buffer *b,const hp_xml_node *n){
-    const hp_xml_node *c;
+/* Inline elements (tab, lineBreak, fwSpace, nbSpace) stand for one text byte.
+ * Rewritten text puts the original element back at that byte, so a tab keeps
+ * its width/leader and a full-width space stays full width. 0.11.2 */
+typedef struct {size_t at;const char *raw;size_t n;} inl;
+typedef struct {inl *v;size_t n,cap;int failed;} inls;
+static void inl_add(inls *m,size_t at,const char *raw,size_t n){
+    inl *g;if(m->failed)return;
+    if(m->n==m->cap){size_t cap=m->cap?m->cap*2:16;g=realloc(m->v,cap*sizeof(*g));if(!g){m->failed=1;return;}m->v=g;m->cap=cap;}
+    m->v[m->n++]=(inl){at,raw,n};
+}
+/* src: the XML the nodes were parsed from (element bytes are recorded in m) */
+static void text_of_m(buffer *b,const hp_xml_node *n,const char *src,inls *m){
+    const hp_xml_node *c;const char *ch;
     for(c=n->first_child;c;c=c->next) {
-        if(c->type==HP_XML_TEXT)putn(b,c->text,c->text_len);
-        else if(hp_xml_is(c,"lineBreak"))puts_b(b,"\n");
-        else if(hp_xml_is(c,"tab"))puts_b(b,"\t");
-        else if(hp_xml_is(c,"fwSpace")||hp_xml_is(c,"nbSpace"))puts_b(b," ");
+        if(c->type==HP_XML_TEXT){putn(b,c->text,c->text_len);continue;}
+        if(hp_xml_is(c,"lineBreak"))ch="\n";
+        else if(hp_xml_is(c,"tab"))ch="\t";
+        else if(hp_xml_is(c,"fwSpace")||hp_xml_is(c,"nbSpace"))ch=" ";
+        else continue;
+        if(m&&src)inl_add(m,b->n,src+c->start,c->end-c->start);
+        puts_b(b,ch);
     }
 }
-static void escape(buffer *b,const char *s,const char *qname){
-    const unsigned char *p=(const unsigned char *)s;const char *colon=strchr(qname,':');
-    for(;*p;p++)switch(*p){
-    case '&':puts_b(b,"&amp;");break;case '<':puts_b(b,"&lt;");break;case '>':puts_b(b,"&gt;");break;
-    case '\r':break;
-    case '\n':case '\t':puts_b(b,"<");if(colon)putn(b,qname,(size_t)(colon-qname)+1);puts_b(b,*p=='\n'?"lineBreak/>":"tab/>");break;
-    default:putn(b,(const char *)p,1);break;
+static void text_of(buffer *b,const hp_xml_node *n){text_of_m(b,n,NULL,NULL);}
+/* bytes [from,to) of s; m (optional, sorted) gives original inline elements */
+static void escape_seg(buffer *b,const char *s,size_t from,size_t to,const char *qname,const inls *m){
+    const unsigned char *p=(const unsigned char *)s;const char *colon=strchr(qname,':');size_t i,k=0;
+    for(i=from;i<to;i++){
+        if(m)while(k<m->n&&m->v[k].at<i)k++;
+        if(m&&k<m->n&&m->v[k].at==i&&(p[i]=='\t'||p[i]=='\n'||p[i]==' ')){putn(b,m->v[k].raw,m->v[k].n);continue;}
+        switch(p[i]){
+        case '&':puts_b(b,"&amp;");break;case '<':puts_b(b,"&lt;");break;case '>':puts_b(b,"&gt;");break;
+        case '\r':break;
+        case '\n':case '\t':puts_b(b,"<");if(colon)putn(b,qname,(size_t)(colon-qname)+1);puts_b(b,p[i]=='\n'?"lineBreak/>":"tab/>");break;
+        default:putn(b,(const char *)p+i,1);break;
+        }
     }
 }
+static void escape(buffer *b,const char *s,const char *qname){escape_seg(b,s,0,strlen(s),qname,NULL);}
 typedef struct {size_t start,end;hp_char_format cf;} span; /* character format on bytes [start,end) of the item text */
 typedef struct {size_t section;hp_xml_node *p;const unsigned char *source;char *original,*text;int deleted,inserted,simple;hp_char_format cf;hp_para_format pf;span *spans;size_t span_count;} item;
 /* header: Contents/header.xml parsed once (character/paragraph shapes for formatting). */
@@ -148,21 +169,22 @@ static int edits(item *it,patch **ps,size_t *n){
     while(suf<old-pre&&suf<now-pre&&it->original[old-1-suf]==it->text[now-1-suf])suf++;
     while(suf&&((unsigned char)it->original[old-suf]&192)==128)suf--;
     for(r=hp_xml_child(it->p,"run");r;r=hp_xml_next(r,"run"))for(t=hp_xml_child(r,"t");t;t=hp_xml_next(t,"t")){
-        buffer orig={0},rep={0},xml={0};char *s,*result;size_t len,a,z;int insert;
-        text_of(&orig,t);s=finish(&orig);if(!s)return 0;len=strlen(s);
+        buffer orig={0},xml={0};inls m={0};char *s;size_t len,a,z;int insert;
+        text_of_m(&orig,t,(const char *)it->source,&m);s=finish(&orig);if(!s||m.failed){free(s);free(m.v);return 0;}len=strlen(s);
         a=pre>offset?(pre-offset<len?pre-offset:len):0;
         z=old-suf>offset?(old-suf-offset<len?old-suf-offset:len):0;
         insert=!placed&&pre<=offset+len;
-        if(insert||z>a){putn(&rep,s,a);if(insert){putn(&rep,it->text+pre,now-pre-suf);placed=1;}putn(&rep,s+z,len-z);result=finish(&rep);
-            if(!result){free(s);return 0;}
+        if(insert||z>a){
             if(t->inner_start==t->end){putn(&xml,(const char *)it->source+t->start,t->end-t->start-2);puts_b(&xml,">");}
             else putn(&xml,(const char *)it->source+t->start,t->inner_start-t->start);
-            escape(&xml,result,t->qname);
+            /* kept text keeps its inline elements; the replacement is new text */
+            escape_seg(&xml,s,0,a,t->qname,&m);
+            if(insert){escape_seg(&xml,it->text,pre,now-suf,t->qname,NULL);placed=1;}
+            escape_seg(&xml,s,z,len,t->qname,&m);
             if(t->inner_start==t->end){puts_b(&xml,"</");puts_b(&xml,t->qname);puts_b(&xml,">");}
             else putn(&xml,(const char *)it->source+t->inner_end,t->end-t->inner_end);
-            free(result);
-            if(!add_patch(ps,n,t->start,t->end,finish(&xml))){free(s);return 0;}
-        }free(s);offset+=len;
+            if(!add_patch(ps,n,t->start,t->end,finish(&xml))){free(s);free(m.v);return 0;}
+        }free(s);free(m.v);offset+=len;
     }
     if(!placed){/* Empty/object-only paragraphs acquire a run without removing controls. */
         buffer b={0};const char *colon;char prefix[128]="";size_t pn;
@@ -743,6 +765,7 @@ static hp_status rebuild_runs(const char *xml, const hp_xml_node *p, const item 
                               size_t *np) {
     const hp_xml_node *r, *first = NULL, *last = NULL, *sample_t = NULL;
     buffer text = {0}, out = {0}, tail = {0};
+    inls marks = {0};
     const hp_xml_node **owner = NULL;
     size_t len = 0, cap = 0, i, k;
     char *all, *rq = NULL, *tq = NULL;
@@ -758,11 +781,12 @@ static hp_status rebuild_runs(const char *xml, const hp_xml_node *p, const item 
             if (!sample_t) {
                 sample_t = t;
             }
-            text_of(&text, t);
+            text_of_m(&text, t, xml, &marks);
         }
-        if (text.failed) {
+        if (text.failed || marks.failed) {
             free(text.s);
             free(owner);
+            free(marks.v);
             return HP_ERR_NOMEM;
         }
         if (text.n > cap) {
@@ -770,6 +794,7 @@ static hp_status rebuild_runs(const char *xml, const hp_xml_node *p, const item 
             if (!g) {
                 free(text.s);
                 free(owner);
+                free(marks.v);
                 return HP_ERR_NOMEM;
             }
             owner = g;
@@ -789,6 +814,7 @@ static hp_status rebuild_runs(const char *xml, const hp_xml_node *p, const item 
         free(all);
         free(owner);
         free(tail.s);
+        free(marks.v);
         return HP_OK;
     }
     {
@@ -839,25 +865,19 @@ static hp_status rebuild_runs(const char *xml, const hp_xml_node *p, const item 
         } else {
             snprintf(num, sizeof(num), "%s", base ? base : "0");
         }
-        {
-            char saved = all[j], *piece;
-            all[j] = '\0';
-            piece = all + i;
-            puts_b(&out, "<");
-            puts_b(&out, rq);
-            puts_b(&out, " charPrIDRef=\"");
-            puts_b(&out, num);
-            puts_b(&out, "\"><");
-            puts_b(&out, tq);
-            puts_b(&out, ">");
-            escape(&out, piece, tq);
-            puts_b(&out, "</");
-            puts_b(&out, tq);
-            puts_b(&out, "></");
-            puts_b(&out, rq);
-            puts_b(&out, ">");
-            all[j] = saved;
-        }
+        puts_b(&out, "<");
+        puts_b(&out, rq);
+        puts_b(&out, " charPrIDRef=\"");
+        puts_b(&out, num);
+        puts_b(&out, "\"><");
+        puts_b(&out, tq);
+        puts_b(&out, ">");
+        escape_seg(&out, all, i, j, tq, &marks);
+        puts_b(&out, "</");
+        puts_b(&out, tq);
+        puts_b(&out, "></");
+        puts_b(&out, rq);
+        puts_b(&out, ">");
         i = j;
     }
     if (st == HP_OK && (!rq || !tq)) {
@@ -879,6 +899,7 @@ static hp_status rebuild_runs(const char *xml, const hp_xml_node *p, const item 
     free(tail.s);
     free(all);
     free(owner);
+    free(marks.v);
     free(rq);
     free(tq);
     return st;

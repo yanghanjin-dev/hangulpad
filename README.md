@@ -7,7 +7,9 @@ A lightweight Korean word processor with a C11 HWP/HWPX engine and a Windows vie
 
 > **기본 개발 환경:** Windows PowerShell / MSYS2 UCRT64 / CMake / Ninja.
 
-**현재 버전: 0.11.1** (2026-10-30) — 변경 내역은 [`CHANGELOG.md`](CHANGELOG.md)
+**현재 버전: 0.11.2** (2026-10-31) — 변경 내역은 [`CHANGELOG.md`](CHANGELOG.md)
+
+0.11.2는 편집·서식 저장 때 탭(너비·채움 점선)과 전각 공백을 보존하고, HWP 변환본에 각주/미주 모양·쪽 테두리·표 셀 영역·대체 글꼴·글꼴 종류(HFT)를 넣습니다.
 
 0.11.0은 **문단 안 일부 글자에 글자 모양**을 주고, 쪽 보기에서 **더블클릭한 자리에서 편집**을 시작합니다(편집 중 쪽 클릭으로 커서 이동, 쪽 위에 커서·선택 표시).
 
