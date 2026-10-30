@@ -4,6 +4,18 @@
 버전 번호는 [유의적 버전(SemVer)](https://semver.org/lang/ko/)을 따르며, 단일 출처는
 `include/hp/version.h` 입니다. 규칙은 README의 "버전 규칙"을 참고하세요.
 
+## [0.10.2] - 2026-10-30
+
+### 수정 (HWP → HWPX 변환본의 한컴오피스 호환)
+- 변환한 header.xml에 **탭 정의(tabProperties), 문단 번호(numberings, 10수준), 글머리표(bullets), 스타일(styles)** 추가. 문단 모양·문단이 참조하는 정의(tabPrIDRef, 머리 번호 idRef, styleIDRef)가 이제 모두 문서 안에 있음. 목록마다 itemCnt, compatibleDocument·docOption 추가.
+- 변환본 패키지를 한컴오피스가 저장하는 구성과 순서로 만듦: settings.xml, META-INF/container.rdf, META-INF/manifest.xml, Preview/PrvText.txt 추가, version.xml 비압축·xmlVersion 1.5, content.hpf 메타데이터와 이름공간, header·section 이름공간 전체. (1차 확인에서 새 문서가 "손상"으로 나왔던 원인과 같은 항목들)
+- `src/hwpx_ns.h`: HWPX 쓰기와 HWP 변환이 같은 이름공간 선언 사용.
+
+### 검증
+- hwp2hwpx 시험 자료 41쌍: 변환한 탭·글머리표 정의가 한컴 HWPX와 41쌍 모두 동일, 스타일은 글자 스타일의 의미 없는 문단 모양 번호를 빼면 동일, 문단 번호는 한컴 버전에 따라 8~10수준을 쓰는지만 다름(29쌍 동일).
+- HWP 44종을 변환·다시 읽은 문서 모델이 HWP를 직접 읽은 것과 같음, 41쌍 HWP/HWPX 문서 모델 동일 유지, golden 10종 동일.
+- 한컴오피스 확인용 파일: `한컴오피스-확인/3차` (변환본 3종, 서식 문서 4종, 체크리스트).
+
 ## [0.10.1] - 2026-10-30
 
 ### 수정
