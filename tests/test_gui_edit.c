@@ -35,9 +35,32 @@ int main(void){
         CHECK(hp_editor_get_format(saved,0,&cf,&pf)==HP_OK);CHECK(cf.bold&&pf.align==HP_ALIGN_CENTER&&cf.size_hwp==1100&&cf.color_rgb==0xFF0000);
         CHECK(!strcmp(hp_editor_text(saved,1),"수정 후 확인"));hp_editor_free(saved);saved=NULL;
     }
+    /* 0.11.0: a selection formats part of a paragraph; a page click finds it */
+    {   hp_char_format at;hp_hit_map hits={0};HDC dc=CreateCompatibleDC(NULL);HBITMAP bmp,old;size_t k,sec;uint32_t src;long ci;int pw,ph;const hp_hit *h=NULL;
+        list_select_item(1);SendMessageW(g_text,EM_SETSEL,5,7);          /* 확인 */
+        SendMessageW(g_main,WM_COMMAND,IDM_ITALIC,0);
+        CHECK(hp_editor_get_format_at(g_editor,1,12,&at)==HP_OK&&at.italic);
+        CHECK(hp_editor_get_format_at(g_editor,1,1,&at)==HP_OK&&!at.italic);
+        CHECK(!g_preview_pending&&g_doc);
+        view_page_size(0,&pw,&ph);bmp=CreateBitmap(pw,ph,1,32,NULL);old=(HBITMAP)SelectObject(dc,bmp);
+        g_hit=&hits;paint_document_page(dc,0);g_hit=NULL;SelectObject(dc,old);DeleteObject(bmp);DeleteDC(dc);
+        for(k=0;k<hits.n;k++)if(item_for_source(hits.v[k].section,hits.v[k].source_p)==1&&hits.v[k].ci==5)h=&hits.v[k];
+        CHECK(h);
+        CHECK(hit_test(0,h->x0+1,(h->y0+h->y1)/2.0,&sec,&src,&ci));CHECK(item_for_source(sec,src)==1&&ci==5);
+        {   RECT p=g_page_rects[0];int x,y;DWORD a=0,b=0;
+            OffsetRect(&p,-g_scroll_x,-g_scroll_y);
+            x=p.left+(int)((h->x0+1)*(p.right-p.left)/pw);y=p.top+(int)((h->y0+h->y1)/2.0*(p.bottom-p.top)/ph);
+            list_select_item(0);view_click(x,y,0);
+            SendMessageW(g_text,EM_GETSEL,(WPARAM)&a,(LPARAM)&b);CHECK(g_edit_index==1&&a==5&&b==5);
+        }
+        free(hits.v);
+        CHECK(editor_save(0));CHECK(hp_editor_open(utf8,&saved)==HP_OK);
+        CHECK(hp_editor_get_format_at(saved,1,12,&at)==HP_OK&&at.italic);CHECK(hp_editor_get_format_at(saved,1,1,&at)==HP_OK&&!at.italic);
+        hp_editor_free(saved);saved=NULL;
+    }
     list_select_item(1);
     editor_remove();CHECK(g_dirty);CHECK(editor_save(0));CHECK(hp_editor_open(utf8,&saved)==HP_OK);CHECK(hp_editor_count(saved)==1);hp_editor_free(saved);
-    free(utf8);DeleteFileW(path);DestroyWindow(g_main);puts("Native GUI new/edit/insert/preview/format/find/replace/zoom/save/reedit/delete passed");return 0;
+    free(utf8);DeleteFileW(path);DestroyWindow(g_main);puts("Native GUI new/edit/insert/preview/format/range/click/find/replace/zoom/save/reedit/delete passed");return 0;
 }
 
 

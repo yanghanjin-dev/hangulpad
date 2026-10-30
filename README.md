@@ -7,7 +7,9 @@ A lightweight Korean word processor with a C11 HWP/HWPX engine and a Windows vie
 
 > **기본 개발 환경:** Windows PowerShell / MSYS2 UCRT64 / CMake / Ninja.
 
-**현재 버전: 0.10.2** (2026-10-30) — 변경 내역은 [`CHANGELOG.md`](CHANGELOG.md)
+**현재 버전: 0.11.0** (2026-10-30) — 변경 내역은 [`CHANGELOG.md`](CHANGELOG.md)
+
+0.11.0은 **문단 안 일부 글자에 글자 모양**을 주고, 쪽 보기에서 **더블클릭한 자리에서 편집**을 시작합니다(편집 중 쪽 클릭으로 커서 이동, 쪽 위에 커서·선택 표시).
 
 0.10.2는 HWP를 HWPX로 변환할 때 탭·문단 번호·글머리표·스타일 정의와 한컴 패키지 구성(settings·manifest·미리보기)을 함께 저장합니다.
 
@@ -47,7 +49,7 @@ HWP 문서를 저장하면 원본은 그대로 두고 새 `.hwpx` 파일로 저�
 바뀐 구간은 해당 run의 서식을 사용하고, 새 문단은 기준 문단의 문단/글자 스타일을 상속합니다.
 수정한 문단의 오래된 줄 위치 정보는 제거하여 다시 배치합니다. 엔진 API는 `include/hp/edit.h`입니다.
 
-현재 편집은 **문단별 텍스트 편집과 문단 단위 서식**입니다. 페이지 위에 직접 입력하는 WYSIWYG, 문단 안 일부 글자의 서식,
+현재 편집은 **문단별 텍스트 편집과 글자·문단 서식**입니다(입력은 편집 입력창, 위치는 쪽 위에서 클릭으로 고름). 쪽 위에 바로 입력하는 WYSIWYG,
 개체 삽입·삭제·이동, 구역 구성 변경은 지원하지 않습니다. 개체·구역 제어를 포함한 문단과 영역의
 마지막 문단 삭제는 거부합니다. 실행 취소는 현재 선택 문단의 텍스트 입력에 적용되며 문단 추가·삭제에는
 적용되지 않습니다. 편집하지 않은 기존 본문은 원본을 유지하지만 수정 후 한컴과 동일한 페이지 수나
@@ -203,7 +205,7 @@ See [`NOTICE`](NOTICE) for the Hancom HWP / OWPML attribution placeholder requir
 ## Not yet
 
 - Binary HWP write (HWP documents are saved as HWPX)
-- WYSIWYG editing on the page; formatting of part of a paragraph (0.10.0 formats whole paragraphs)
+- Typing directly on the page (0.11.0: click on the page to place the caret, type in the edit box; formats apply to the selected characters)
 - Styles, numbering/bullets, page setup editing, table/picture editing (menus are present, greyed)
 
 

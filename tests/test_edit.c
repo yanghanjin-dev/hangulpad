@@ -75,6 +75,48 @@ static int formatting(const char *path,const char *out,size_t step){
     printf("Formatted paragraphs saved and reread: %zu of %zu\n",done,n);
     hp_editor_free(e);hp_editor_free(again);return 0;
 }
+
+/* 0.11.0: character formats on part of a paragraph */
+static int ranges(void){
+    hp_document *g=hp_document_from_text("제목 (구역 설정이 있는 문단)");hp_editor *e=NULL,*again=NULL;hp_char_format cf,at;size_t i;
+    CHECK(g);CHECK(hp_section_add_paragraph_text(&g->sections[0],"가나다라마바사")==HP_OK);CHECK(hp_section_add_paragraph_text(&g->sections[0],"Hello world & <ok>")==HP_OK);
+    CHECK(hp_hwpx_write(g,"tmp/range-src.hwpx")==HP_OK);hp_document_free(g);g=NULL;
+    CHECK(hp_editor_open("tmp/range-src.hwpx",&e)==HP_OK);
+    memset(&cf,0,sizeof cf);cf.fields=HP_CF_BOLD|HP_CF_COLOR;cf.bold=1;cf.color_rgb=0x0000FF;
+    CHECK(hp_editor_apply_char_format_range(e,1,6,12,&cf)==HP_OK);              /* 다라 */
+    CHECK(hp_editor_apply_char_format_range(e,1,7,7,&cf)==HP_ERR_INVALID);CHECK(hp_editor_apply_char_format_range(e,0,0,3,&cf)==HP_ERR_UNSUPPORTED);
+    memset(&cf,0,sizeof cf);cf.fields=HP_CF_ITALIC;cf.italic=1;
+    CHECK(hp_editor_apply_char_format_range(e,2,6,11,&cf)==HP_OK);              /* world */
+    CHECK(hp_editor_set(e,1,"앞에 가나다라마바사")==HP_OK);                       /* range moves with the text */
+    CHECK(hp_editor_get_format_at(e,1,14,&at)==HP_OK&&at.bold);                  /* 다 */
+    CHECK(hp_editor_get_format_at(e,1,3,&at)==HP_OK&&!at.bold);
+    CHECK(hp_editor_save(e,"tmp/range-out.hwpx")==HP_OK);
+    CHECK(hp_editor_open("tmp/range-out.hwpx",&again)==HP_OK);
+    CHECK(!strcmp(hp_editor_text(again,1),"앞에 가나다라마바사"));CHECK(!strcmp(hp_editor_text(again,2),"Hello world & <ok>"));
+    CHECK(hp_editor_get_format_at(again,1,14,&at)==HP_OK&&at.bold&&at.color_rgb==0x0000FF);
+    CHECK(hp_editor_get_format_at(again,1,3,&at)==HP_OK&&!at.bold);
+    CHECK(hp_editor_get_format_at(again,1,22,&at)==HP_OK&&!at.bold);             /* 마 */
+    CHECK(hp_editor_get_format_at(again,2,7,&at)==HP_OK&&at.italic);
+    CHECK(hp_editor_get_format_at(again,2,2,&at)==HP_OK&&!at.italic);
+    {   hp_document *d=NULL;const hp_paragraph *p0,*p1;
+        CHECK(hp_hwpx_read("tmp/range-out.hwpx",&d)==HP_OK);
+        p0=&d->sections[0].blocks[1].paragraph;p1=&d->sections[0].blocks[2].paragraph;
+        CHECK(p0->run_count==3&&!p0->runs[0].bold&&p0->runs[1].bold&&!strcmp(p0->runs[1].text,"다라")&&!p0->runs[2].bold);
+        CHECK(p1->run_count==3&&p1->runs[1].italic&&!strcmp(p1->runs[1].text,"world")&&!strcmp(p1->runs[2].text," & <ok>"));
+        hp_document_free(d);
+    }
+    /* a later whole-paragraph format and more ranges combine */
+    memset(&cf,0,sizeof cf);cf.fields=HP_CF_SIZE;cf.size_hwp=1600;
+    CHECK(hp_editor_apply_char_format(again,1,&cf)==HP_OK);
+    memset(&cf,0,sizeof cf);cf.fields=HP_CF_UNDERLINE;cf.underline=1;
+    CHECK(hp_editor_apply_char_format_range(again,1,0,6,&cf)==HP_OK);
+    CHECK(hp_editor_save(again,"tmp/range-out2.hwpx")==HP_OK);hp_editor_free(again);again=NULL;
+    CHECK(hp_editor_open("tmp/range-out2.hwpx",&again)==HP_OK);
+    CHECK(hp_editor_get_format_at(again,1,1,&at)==HP_OK&&at.underline&&at.size_hwp==1600&&!at.bold);
+    CHECK(hp_editor_get_format_at(again,1,14,&at)==HP_OK&&!at.underline&&at.size_hwp==1600&&at.bold);
+    for(i=0;i<hp_editor_count(again);i++)CHECK(hp_editor_text(again,i)!=NULL);
+    hp_editor_free(e);hp_editor_free(again);puts("Range character formats passed");return 0;
+}
 static int corpus(const char *path){
     hp_editor *e=NULL,*again=NULL;size_t i,n,changed=0;char out[100],raw[100]; unsigned long key=0;const unsigned char *q=(const unsigned char *)path;for(;*q;q++)key=key*33+*q;snprintf(out,sizeof(out),"tmp/edit-corpus-%lu.hwpx",key);snprintf(raw,sizeof(raw),"tmp/edit-corpus-%lu-raw.hwpx",key);
     CHECK(hp_editor_open(path,&e)==HP_OK);n=hp_editor_count(e);CHECK(n>10);
@@ -114,7 +156,7 @@ int main(int argc,char **argv){
     CHECK(hp_editor_open(out,&again)==HP_OK);CHECK(hp_editor_count(again)==n);
     for(i=0;i<n;i++)if(*hp_editor_text(again,i))CHECK(!strcmp(hp_editor_text(again,i),"표 안과 본문 수정 & 보존"));
     CHECK(hp_editor_save(e,"no-such-directory/out.hwpx")!=HP_OK);
-    hp_editor_free(e);hp_editor_free(again);CHECK(styled()==0);{hp_document *g=hp_document_from_text("글자 모양 시험");CHECK(g);CHECK(hp_section_add_paragraph_text(&g->sections[0],"둘째")==HP_OK);CHECK(hp_hwpx_write(g,"tmp/edit-format-src.hwpx")==HP_OK);hp_document_free(g);}
+    hp_editor_free(e);hp_editor_free(again);CHECK(styled()==0);CHECK(ranges()==0);{hp_document *g=hp_document_from_text("글자 모양 시험");CHECK(g);CHECK(hp_section_add_paragraph_text(&g->sections[0],"둘째")==HP_OK);CHECK(hp_hwpx_write(g,"tmp/edit-format-src.hwpx")==HP_OK);hp_document_free(g);}
     CHECK(formatting("tmp/edit-format-src.hwpx","tmp/edit-format.hwpx",1)==0);CHECK(formatting("tmp/edit-output.hwpx","tmp/edit-format-t2.hwpx",1)==0);CHECK(formatting("tests/fixtures/table_pagination.hwpx","tmp/edit-format-table.hwpx",2)==0);puts("Text replacement, insert/delete, Unicode, table preservation, repeat save passed");return 0;
 }
 

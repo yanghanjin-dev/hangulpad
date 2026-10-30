@@ -86,6 +86,7 @@ typedef struct hp_paragraph {
     uint32_t inline_prefix_width_hwp; /* leading inline table, rendered on first text line */
     int object_anchor_only; /* blank text on a separately rendered object line */
     uint32_t mark_size_hwp; /* character size of the paragraph mark of a paragraph without runs (0 = unknown) */
+    uint32_t source_p; /* 1 + index of the source <p> in its section, document order (0 = unknown); 0.11.0 */
     hp_line_seg *segs;
     size_t seg_count;
 } hp_paragraph;

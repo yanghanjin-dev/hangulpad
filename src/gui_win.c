@@ -69,6 +69,35 @@ static int S(int v) {
 #define FONT_SCALE 8
 static int g_paper_width = 794, g_paper_height = 1123;
 static size_t g_layout_section;
+/* Glyph boxes recorded while a page is drawn (0.11.0): page clicks find the
+ * source paragraph and character, and the caret/selection is drawn on them. */
+typedef struct { size_t section; uint32_t source_p; size_t ci, len; double x0, x1; int y0, y1; } hp_hit;
+typedef struct { hp_hit *v; size_t n, cap; } hp_hit_map;
+static hp_hit_map *g_hit;
+static void hit_add(const hp_paragraph *para, size_t ci, size_t len, double x0, double x1, int y0, int y1) {
+    hp_hit *h;
+    if (!g_hit || !para->source_p) {
+        return;
+    }
+    if (g_hit->n == g_hit->cap) {
+        size_t cap = g_hit->cap ? g_hit->cap * 2 : 1024;
+        h = (hp_hit *)realloc(g_hit->v, cap * sizeof(*h));
+        if (!h) {
+            return;
+        }
+        g_hit->v = h;
+        g_hit->cap = cap;
+    }
+    h = &g_hit->v[g_hit->n++];
+    h->section = g_layout_section;
+    h->source_p = para->source_p;
+    h->ci = ci;
+    h->len = len;
+    h->x0 = x0;
+    h->x1 = x1;
+    h->y0 = y0;
+    h->y1 = y1;
+}
 #define PAGE_W_PX g_paper_width
 #define PAGE_H_PX g_paper_height
 #define MARGIN_X 56
@@ -1347,9 +1376,11 @@ static int layout_saved_para(HDC hdc, const hp_paragraph *para, int left, int ri
                     }else x+=glyph_step(hdc,run ? run : &fallback,all+ci,len,(int)(x+0.5),glyph_y,1);
                     if(gap<0 ? ci>=visible_start&&ci+(size_t)len<visible_end : justification_gap(all,ci,visible_start,visible_end))x+=gap;
                     if(run && run->underline)draw_text_underline(hdc,glyph_x,x,baseline,run);
+                    hit_add(para,ci,(size_t)len,glyph_x,x,base+top,base+top+pitch);
                 }
                 ci+=(size_t)len;
             }
+            if(draw && start==finish)hit_add(para,start,0,x,x,base+top,base+top+pitch); /* empty line */
             if(ink) {
                 int ink_top=0,ink_height=text_ink_height(hdc,para,all,start,finish,hp_line_px(seg->baseline_hwp),&ink_top);
                 hp_cut_add(ink,ink_origin+top+ink_top,ink_origin+top+ink_top+ink_height);
@@ -1371,7 +1402,9 @@ static int layout_text_para(HDC hdc, const hp_paragraph *para, int left, int rig
     if(para->seg_count) return layout_saved_para(hdc,para,left,right,base,draw,ends,capacity,hard,ink,ink_origin);
     if(para_is_blank(para)) {
         /* an empty line still takes one line box in 한글 */
-        return hp_line_px(relaid_line_size_hwp(para)+relaid_line_spacing_hwp(para));
+        int h=hp_line_px(relaid_line_size_hwp(para)+relaid_line_spacing_hwp(para));
+        if(draw)hit_add(para,0,0,left,left,base,base+h);
+        return h;
     }
     /* Line box as 한글 lays it out (the values a saved line array would hold);
      * font ascent/descent and a 14 px minimum made re-laid-out cells taller

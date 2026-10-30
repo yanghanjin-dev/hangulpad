@@ -49,6 +49,15 @@ hp_status hp_editor_get_format(const hp_editor *e, size_t i, hp_char_format *cf,
 /* Merge the given fields into paragraph i. */
 hp_status hp_editor_apply_char_format(hp_editor *e, size_t i, const hp_char_format *cf);
 hp_status hp_editor_apply_para_format(hp_editor *e, size_t i, const hp_para_format *pf);
+
+/* Character format for part of paragraph i: bytes [start, end) of
+ * hp_editor_text(e, i) (UTF-8, rounded out to whole characters). Later text
+ * edits keep the range on the same characters. Paragraphs with objects or
+ * controls (hp_editor_can_delete() == 0) accept only whole-paragraph formats:
+ * HP_ERR_UNSUPPORTED. 0.11.0 */
+hp_status hp_editor_apply_char_format_range(hp_editor *e, size_t i, size_t start, size_t end, const hp_char_format *cf);
+/* Character format at a text offset (what a caret there would type with). */
+hp_status hp_editor_get_format_at(const hp_editor *e, size_t i, size_t offset, hp_char_format *cf);
 #endif
 
 

@@ -79,7 +79,24 @@ typedef struct {
     size_t border_count;
     hp_bin_item *bins;
     size_t bin_count;
+    /* start offsets of the section's <p> elements in document order (ascending),
+     * to record each paragraph's source index (hp_paragraph.source_p) */
+    size_t *p_starts;
+    size_t p_count;
 } hp_style_tables;
+
+static uint32_t p_index(const hp_style_tables *st, const hp_xml_node *p) {
+    size_t lo = 0, hi = st->p_count;
+    while (lo < hi) {
+        size_t mid = (lo + hi) / 2;
+        if (st->p_starts[mid] < p->start) {
+            lo = mid + 1;
+        } else {
+            hi = mid;
+        }
+    }
+    return lo < st->p_count && st->p_starts[lo] == p->start ? (uint32_t)lo + 1 : 0;
+}
 
 static char *hp_strdup(const char *s) {
     size_t n;
@@ -128,6 +145,7 @@ static void style_tables_free(hp_style_tables *st) {
     free(st->paras);
     free(st->borders);
     free(st->bins);
+    free(st->p_starts);
     memset(st, 0, sizeof(*st));
 }
 
@@ -1024,6 +1042,7 @@ static hp_status parse_cell_content(const hp_xml_node *tc, const hp_style_tables
             if (cell_harvest_objects(n, st, cell) != HP_OK || parse_cell_paragraph(n, st, &para) != HP_OK) {
                 return HP_ERR_NOMEM;
             }
+            para.source_p = p_index(st, n);
             if (para.run_count > 0 || para.seg_count > 0 || para.object_anchor_only) {
                 hp_paragraph *arr =
                     (hp_paragraph *)realloc(cell->paragraphs, (cell->paragraph_count + 1) * sizeof(*arr));
@@ -1377,6 +1396,14 @@ static hp_status parse_section(const hp_xml_node *root, hp_section *sec, const h
             int style_break = style_id >= 0 && (size_t)style_id < st->para_count &&
                 st->paras[style_id].valid && st->paras[style_id].page_break_before;
             rc = parse_section_paragraph(n, sec, st);
+            {
+                size_t bi;
+                for (bi = first; rc == HP_OK && bi < sec->block_count; bi++) {
+                    if (sec->blocks[bi].kind == HP_BLOCK_PARAGRAPH) {
+                        sec->blocks[bi].paragraph.source_p = p_index(st, n);
+                    }
+                }
+            }
             /* A floating table is anchored to the paragraph, not an inline
              * character. Text serialized after it still occupies the anchor
              * line above a table with a positive vertical paragraph offset. */
@@ -1652,6 +1679,23 @@ hp_status hp_hwpx_read_package(hp_package *pkg, hp_document **out_doc) {
         doc->sections = secs;
         memset(&doc->sections[doc->section_count], 0, sizeof(hp_section));
         doc->section_count++; /* counted before parsing so a failure is freed with doc */
+        {
+            /* document-order index of every <p> (the editor's paragraph order) */
+            const hp_xml_node *root = hp_xml_root(xml), *pn;
+            size_t cap = 0;
+            styles.p_count = 0;
+            for (pn = hp_xml_find(root, "p"); pn; pn = hp_xml_find_next(root, pn, "p")) {
+                if (styles.p_count == cap) {
+                    size_t *g = (size_t *)realloc(styles.p_starts, (cap ? cap * 2 : 256) * sizeof(*g));
+                    if (!g) {
+                        break;
+                    }
+                    styles.p_starts = g;
+                    cap = cap ? cap * 2 : 256;
+                }
+                styles.p_starts[styles.p_count++] = pn->start;
+            }
+        }
         st = parse_section(hp_xml_root(xml), &doc->sections[doc->section_count - 1], &styles);
         hp_xml_free(xml);
         xml = NULL;
