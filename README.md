@@ -7,7 +7,9 @@ A lightweight Korean word processor with a C11 HWP/HWPX engine and a Windows vie
 
 > **기본 개발 환경:** Windows PowerShell / MSYS2 UCRT64 / CMake / Ninja.
 
-**현재 버전: 0.10.0** (2026-10-30) — 변경 내역은 [`CHANGELOG.md`](CHANGELOG.md)
+**현재 버전: 0.10.1** (2026-10-30) — 변경 내역은 [`CHANGELOG.md`](CHANGELOG.md)
+
+0.10.1은 한컴오피스가 HWP로 저장한 문서(셀 줄 배치가 비어 있는 파일)도 HWPX 원본과 같은 쪽 수로 배치합니다.
 
 0.10.0은 **한글 2010 방식의 메뉴·도구 상자·상황선**과 **글자 모양·문단 모양**, 찾기/바꾸기, 화면 확대·두 쪽 보기,
 인쇄, 문서 정보, 최근 문서를 추가했습니다. 아직 없는 기능은 메뉴에 흐리게 표시합니다. [메뉴와 기능 구현 내역](docs/menus-v0100-2026-10-30.md).

@@ -961,6 +961,14 @@ static hp_status parse_cell_paragraph(const hp_xml_node *p, const hp_style_table
             if(out->run_count && !is_blank(out->runs[out->run_count-1].text))leading=0;
         }
     }
+    if(!out->run_count) {
+        /* an empty line is as tall as its paragraph mark's character shape */
+        hp_run mark;
+        memset(&mark,0,sizeof(mark));
+        apply_char_style(&mark,st,attr_l(hp_xml_child(p,"run"),"charPrIDRef",0));
+        out->mark_size_hwp=mark.font_size_hwp;
+        free(mark.font_face);
+    }
     if(object) {
         out->object_anchor_only=1;
         for(i=0;i<out->run_count;i++)if(!is_blank(out->runs[i].text))out->object_anchor_only=0;

@@ -85,6 +85,7 @@ typedef struct hp_paragraph {
     int line_spacing_percent; /* 160 = 160%; 0 → treat as 160 */
     uint32_t inline_prefix_width_hwp; /* leading inline table, rendered on first text line */
     int object_anchor_only; /* blank text on a separately rendered object line */
+    uint32_t mark_size_hwp; /* character size of the paragraph mark of a paragraph without runs (0 = unknown) */
     hp_line_seg *segs;
     size_t seg_count;
 } hp_paragraph;

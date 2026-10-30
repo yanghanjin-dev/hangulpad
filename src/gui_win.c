@@ -230,15 +230,6 @@ static int map_face(HDC hdc, const char *name, wchar_t *out, size_t count) {
     return found;
 }
 
-static int para_line_pitch_px(const hp_paragraph *para, int font_px) {
-    int pct = para && para->line_spacing_percent > 0 ? para->line_spacing_percent : 160;
-    int pitch = font_px * pct / 100;
-    if (pitch < font_px + 2) {
-        pitch = font_px + 2;
-    }
-    return pitch;
-}
-
 static int hwp_px_i(int32_t hwp) {
     if (hwp >= 0) {
         return (int)hp_hwp_to_px((uint32_t)hwp);
@@ -545,14 +536,29 @@ static int measure_table_height(HDC hdc, const hp_table *t, int content_w) {
 }
 /* Final line spacing advances to a following line; it is not bottom padding
  * inside a cell. Keep real glyph ink if a substitute font is taller. */
+/* Line box of a paragraph without saved lines, as 한글 computes it:
+ * the largest character size, plus spacing = size * (percent - 100). */
+static uint32_t relaid_line_size_hwp(const hp_paragraph *para) {
+    uint32_t size=0;size_t ri;
+    for(ri=0;ri<para->run_count;ri++)
+        if(para->runs[ri].text && para->runs[ri].text[0] && para->runs[ri].font_size_hwp>size)size=para->runs[ri].font_size_hwp;
+    if(!size)size=para->run_count && para->runs[0].font_size_hwp ? para->runs[0].font_size_hwp
+                 : para->mark_size_hwp ? para->mark_size_hwp : 1000;
+    return size>409600 ? 409600 : size;
+}
+static uint32_t relaid_line_spacing_hwp(const hp_paragraph *para) {
+    int pct=para->line_spacing_percent>0 ? para->line_spacing_percent : 160;
+    return pct>100 ? (uint32_t)((uint64_t)relaid_line_size_hwp(para)*(uint32_t)(pct-100)/100) : 0;
+}
 static int cell_tail_spacing(HDC dc,const hp_table_cell *cell,int width) {
     const hp_paragraph *p;hp_cut_map ink={0};size_t i;int full,trim,ink_bottom=0;
     if(!cell->paragraph_count)return 0;
     p=&cell->paragraphs[cell->paragraph_count-1];
-    if(p->object_anchor_only || !p->seg_count)return 0;
+    if(p->object_anchor_only)return 0;
     for(i=0;i<cell->nested_table_count;i++)if(!cell->nested_before_paragraph ||
         cell->nested_before_paragraph[i]>=cell->paragraph_count)return 0;
-    trim=hwp_px_i((int32_t)p->segs[p->seg_count-1].spacing_hwp);
+    /* the last line's spacing below the text: saved, or the re-laid-out line box */
+    trim=hwp_px_i(p->seg_count ? (int32_t)p->segs[p->seg_count-1].spacing_hwp : (int32_t)relaid_line_spacing_hwp(p));
     if(trim<0)trim=0;
     full=layout_text_para(dc,p,0,width,0,0,NULL,0,NULL,&ink,0);
     if(ink.failed) {free(ink.bands);return 0;}
@@ -851,6 +857,11 @@ static void rebuild_pages(HWND hwnd) {
     size_t section=(size_t)-1;
     int previous_start_page=-1,previous_start_column=-1;
     int ink_page=-1,ink_column=-1,previous_ink_bottom=0;
+    /* Saved positions are page coordinates of the source layout. They are used
+     * only while our page/column is the source's: after our layout pushed
+     * content to another page (e.g. cells re-laid out taller), the next saved
+     * page start re-synchronizes (0.10.1). */
+    int synced=1,start_page,start_column;
     g_page_count=g_piece_count=g_unsafe_table_cuts=g_suppressed_headers=0;
     if (!g_flat_count) return;
     hdc=GetDC(hwnd);
@@ -865,7 +876,7 @@ static void rebuild_pages(HWND hwnd) {
             section=g_flat[i].sec;
             use_section(section);
             page_metrics(&ml,&mr,&mt,&mb,&content_w,&content_h);
-            flow.page=g_page_count;flow.column=flow.y=0;
+            flow.page=g_page_count;flow.column=flow.y=0;synced=1;
             flow.columns=sec->column_count > 0 && sec->column_count <= 32 ? sec->column_count : 1;
             flow.height=content_h > 0 ? content_h : 1;
             col_w=(content_w-(flow.columns-1)*hp_line_px(sec->column_gap_hwp))/flow.columns;
@@ -873,11 +884,12 @@ static void rebuild_pages(HWND hwnd) {
         }
         if(block->page_break_before) hp_flow_break(&flow,1);
         else if(block->column_break_before) hp_flow_break(&flow,0);
-        else if(block->saved_break_before && flow.page==previous_start_page && flow.column==previous_start_column)
+        else if(block->saved_break_before && synced && flow.page==previous_start_page && flow.column==previous_start_column)
             hp_flow_break(&flow,0);
+        if(block->page_break_before || block->column_break_before || block->saved_break_before)synced=1;
         previous_start_page=flow.page;previous_start_column=flow.column;
         if(ink_page!=flow.page || ink_column!=flow.column)previous_ink_bottom=0;
-        if(block->has_saved_y) {
+        if(block->has_saved_y && synced) {
             int target=hp_line_px(block->saved_y_hwp);
             if(block->kind==HP_BLOCK_PARAGRAPH)target-=hwp_px_i(block->paragraph.space_before_hwp);
             /* Drop accumulated rounding/trailing leading only in empty space;
@@ -932,6 +944,7 @@ static void rebuild_pages(HWND hwnd) {
             }
             free(columns);free(rows);
         }
+        start_page=flow.page;start_column=flow.column;
         while(offset<h) {
             hp_slice slice;
             int reserved=0;
@@ -955,11 +968,16 @@ static void rebuild_pages(HWND hwnd) {
                     bottom+=slice.y-offset;
                     if(bottom>previous_ink_bottom)previous_ink_bottom=bottom;
                 }
-            } else if(block->kind!=HP_BLOCK_PARAGRAPH || !para_is_blank(&block->paragraph))previous_ink_bottom=slice.y+slice.height;
+            }
+            /* A table's borders and cell fills are visible to its last row,
+             * below the text ink inside the cells (0.10.1). */
+            if(block->kind==HP_BLOCK_TABLE && slice.y+slice.height>previous_ink_bottom)previous_ink_bottom=slice.y+slice.height;
+            if(!ink.count && (block->kind!=HP_BLOCK_PARAGRAPH || !para_is_blank(&block->paragraph)))previous_ink_bottom=slice.y+slice.height;
             previous_page=slice.page;previous_column=slice.column;
             offset+=slice.height;
             if(offset==limit && limit<h)hp_flow_break(&flow,0);
         }
+        if(previous_page!=start_page || previous_column!=start_column)synced=0;
         free(ends);free(hard);free(ink.bands);
     }
     ReleaseDC(hwnd,hdc);
@@ -1349,23 +1367,17 @@ static int layout_saved_para(HDC hdc, const hp_paragraph *para, int left, int ri
 static int layout_text_para(HDC hdc, const hp_paragraph *para, int left, int right, int base, int draw, int *ends, int capacity, int *hard, hp_cut_map *ink, int ink_origin) {
     hp_paragraph copy;
     hp_line_seg line={0};
-    size_t ri;
-    int height=14,pitch;
     if(para->object_anchor_only)return 0;
     if(para->seg_count) return layout_saved_para(hdc,para,left,right,base,draw,ends,capacity,hard,ink,ink_origin);
     if(para_is_blank(para)) {
-        int fp=para->run_count && para->runs[0].font_size_hwp ? hp_line_px(para->runs[0].font_size_hwp) : 14;
-        return para_line_pitch_px(para,fp)/2;
+        /* an empty line still takes one line box in 한글 */
+        return hp_line_px(relaid_line_size_hwp(para)+relaid_line_spacing_hwp(para));
     }
-    for(ri=0;ri<para->run_count;ri++) {
-        HFONT font=make_font(hdc,&para->runs[ri]),old=(HFONT)SelectObject(hdc,font);
-        TEXTMETRICW tm;GetTextMetricsW(hdc,&tm);
-        if((tm.tmHeight+tm.tmExternalLeading+FONT_SCALE-1)/FONT_SCALE>height)height=(tm.tmHeight+tm.tmExternalLeading+FONT_SCALE-1)/FONT_SCALE;
-        SelectObject(hdc,old);DeleteObject(font);
-    }
-    pitch=para_line_pitch_px(para,height);
-    line.vertsize_hwp=line.textheight_hwp=(uint32_t)(height*75);
-    line.spacing_hwp=(uint32_t)((pitch-height)*75);
+    /* Line box as 한글 lays it out (the values a saved line array would hold);
+     * font ascent/descent and a 14 px minimum made re-laid-out cells taller
+     * than the source (0.10.1). */
+    line.vertsize_hwp=line.textheight_hwp=relaid_line_size_hwp(para);
+    line.spacing_hwp=relaid_line_spacing_hwp(para);
     line.horzpos_hwp=0; /* paragraph indentation is applied by saved_line_box */
     copy=*para;copy.segs=&line;copy.seg_count=1;
     return layout_saved_para(hdc,&copy,left,right,base,draw,ends,capacity,hard,ink,ink_origin);

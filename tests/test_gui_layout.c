@@ -333,6 +333,21 @@ int main(void) {
             free_doc();
         }
     }
+    {
+        /* 0.10.1: 한컴 HWP copies of the samples carry placeholder cell lines;
+         * re-laid-out cells and the saved positions after them must still give
+         * the pages of the HWPX original. */
+        const char *pairs[3][2]={{"sample/corpus/ethics.hwpx","sample/corpus/ethics.hwp"},
+                                 {"sample/corpus/gyuje-규제합리화.hwpx","sample/corpus/gyuje-규제합리화.hwp"},
+                                 {"sample/corpus/mfds-프로프라놀롤.hwpx","sample/corpus/mfds-프로프라놀롤.hwp"}};
+        int k,pages;
+        for(k=0;k<3;k++) {
+            CHECK(hp_document_read(pairs[k][0],&g_doc)==HP_OK);rebuild_flat();rebuild_pages(NULL);pages=g_page_count;free_doc();
+            CHECK(hp_document_read(pairs[k][1],&g_doc)==HP_OK);rebuild_flat();rebuild_pages(NULL);
+            printf("hwp sample %d: pages=%d (hwpx %d)\n",k,g_page_count,pages);
+            CHECK(g_page_count==pages);free_doc();
+        }
+    }
     /* A restart late on a page labels that entire page; hiding lasts one page. */
     g_doc=hp_document_new();small_page(&g_doc->sections[0]);
     g_doc->sections[0].page_number_start=7;g_doc->sections[0].page_number_position=5;
