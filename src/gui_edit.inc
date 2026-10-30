@@ -46,7 +46,7 @@ static void editor_mode(int editing) {
     ShowWindow(g_paralist,editing?SW_SHOW:SW_HIDE);ShowWindow(g_text,editing?SW_SHOW:SW_HIDE);
     GetClientRect(g_main,&r);layout_children(r.right,r.bottom);InvalidateRect(g_main,NULL,TRUE);
     update_status();format_sync();
-    if(editing){status_message(L"Enter: 줄바꿈 · Ctrl+Enter: 문단 추가 · 여러 문단 선택: Shift/Ctrl+클릭 · Alt+L 글자 모양 · Alt+T 문단 모양");SetFocus(g_text);}
+    if(editing){status_message(L"쪽을 클릭하면 그 자리로 · 글자를 골라 서식을 주면 고른 글자에만 · Ctrl+Enter: 문단 추가 · 여러 문단: Shift/Ctrl+클릭");SetFocus(g_text);}
     else{status_message(L"");if(g_view)SetFocus(g_view);}
 }
 static int editor_save(int save_as) {

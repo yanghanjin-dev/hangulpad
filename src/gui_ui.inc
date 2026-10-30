@@ -59,6 +59,7 @@
 #define ID_CB_ZOOM 1204
 #define CBN_APPLY 0x7F00 /* Enter pressed in a toolbar combo */
 #define TIMER_PREVIEW 1
+#define WM_APP_CARET (WM_APP + 2)
 #define RECENT_MAX 8
 
 
@@ -122,6 +123,8 @@ static int g_page_rect_count;
 static const hp_document *g_view_doc;
 static int g_keep_scroll;
 static int g_chord;
+static int g_preview_pending;
+static WNDPROC g_text_proc;
 static wchar_t g_recent[RECENT_MAX][MAX_PATH];
 static int g_recent_count;
 static UINT g_find_msg;
@@ -138,6 +141,10 @@ static void format_sync(void);
 static void view_sync(void);
 static void status_refresh(void);
 static void schedule_preview(int delay_ms);
+static int preview_build(void);
+static void page_caret(HDC dc, int page, const RECT *p, int pw, int ph);
+static void view_click(int x, int y, int enter);
+static void list_select_item(size_t item);
 
 static void status_message(const wchar_t *text) {
     if (g_status) {
@@ -1037,6 +1044,116 @@ static void apply_ui_fonts(void) {
     g_edit_font = edit;
 }
 
+/* ======================= text positions (0.11.0) =======================
+ * Edit control: UTF-16 with CRLF. Engine: UTF-8 with LF. Page hit map:
+ * UTF-16 index of the LF text. */
+
+/* edit control index -> UTF-16 index of the LF text */
+static long edit_to_lf(const wchar_t *w, long at) {
+    long i, k = 0;
+    for (i = 0; i < at && w[i]; i++) {
+        if (w[i] != L'\r') {
+            k++;
+        }
+    }
+    return k;
+}
+
+/* UTF-16 index of the LF text -> UTF-8 byte offset */
+static size_t lf_to_utf8(const wchar_t *w, long at) {
+    long i;
+    size_t bytes = 0;
+    for (i = 0; i < at && w[i]; i++) {
+        if (w[i] == L'\r') {
+            continue;
+        }
+        bytes += w[i] < 0x80 ? 1 : w[i] < 0x800 ? 2 : (w[i] >= 0xD800 && w[i] <= 0xDFFF) ? 2 : 3;
+    }
+    return bytes;
+}
+
+static wchar_t *text_box_text(void) {
+    int n = g_text ? GetWindowTextLengthW(g_text) : 0;
+    wchar_t *w = (wchar_t *)malloc(((size_t)n + 1) * sizeof(wchar_t));
+    if (w) {
+        if (g_text) {
+            GetWindowTextW(g_text, w, n + 1);
+        } else {
+            w[0] = 0;
+        }
+    }
+    return w;
+}
+
+/* selection of the text box in UTF-8 bytes of the current paragraph's text;
+ * returns 1 when there is a non-empty selection */
+static int text_selection_bytes(size_t *start, size_t *end) {
+    DWORD a = 0, b = 0;
+    wchar_t *w;
+    if (!g_editing || !g_text || g_edit_index == (size_t)-1) {
+        return 0;
+    }
+    SendMessageW(g_text, EM_GETSEL, (WPARAM)&a, (LPARAM)&b);
+    if (b <= a || !(w = text_box_text())) {
+        return 0;
+    }
+    *start = lf_to_utf8(w, (long)a);
+    *end = lf_to_utf8(w, (long)b);
+    free(w);
+    return *end > *start;
+}
+
+static size_t caret_bytes(void) {
+    DWORD a = 0, b = 0;
+    wchar_t *w;
+    size_t r;
+    if (!g_editing || !g_text) {
+        return 0;
+    }
+    SendMessageW(g_text, EM_GETSEL, (WPARAM)&a, (LPARAM)&b);
+    if (!(w = text_box_text())) {
+        return 0;
+    }
+    r = lf_to_utf8(w, (long)a);
+    free(w);
+    return r;
+}
+
+/* the character format the toolbar shows / toggles start from */
+static int current_char_format(hp_char_format *cf) {
+    if (!g_editor || g_edit_index == (size_t)-1) {
+        return 0;
+    }
+    if (g_editing) {
+        return hp_editor_get_format_at(g_editor, g_edit_index, caret_bytes(), cf) == HP_OK;
+    }
+    return hp_editor_get_format(g_editor, g_edit_index, cf, NULL) == HP_OK;
+}
+
+/* editor index of the paragraph with source index source_p (1-based) in a
+ * section of the displayed document, and back */
+static size_t item_for_source(size_t section, uint32_t source_p) {
+    size_t i, k = 0;
+    for (i = 0; g_editor && i < hp_editor_count(g_editor); i++) {
+        if (hp_editor_section(g_editor, i) == section && !hp_editor_is_deleted(g_editor, i) && ++k == source_p) {
+            return i;
+        }
+    }
+    return (size_t)-1;
+}
+
+static uint32_t source_of_item(size_t item) {
+    size_t i;
+    uint32_t k = 0;
+    for (i = 0; g_editor && i <= item && i < hp_editor_count(g_editor); i++) {
+        if (hp_editor_section(g_editor, i) == hp_editor_section(g_editor, item) && !hp_editor_is_deleted(g_editor, i)) {
+            k++;
+        }
+    }
+    return k;
+}
+
+
 /* ======================= page view ======================= */
 
 static void view_page_size(int i, int *w, int *h) {
@@ -1308,11 +1425,25 @@ static void view_paint(HWND hwnd) {
                 SetWindowExtEx(mem, pw, ph, NULL);
                 SetViewportExtEx(mem, p.right - p.left, p.bottom - p.top, NULL);
                 SetViewportOrgEx(mem, p.left, p.top, NULL);
-                paint_document_page(mem, i);
-                SetGraphicsMode(mem, GM_ADVANCED);
-                ModifyWorldTransform(mem, NULL, MWT_IDENTITY);
-                SetGraphicsMode(mem, GM_COMPATIBLE);
-                RestoreDC(mem, saved);
+                {
+                    hp_hit_map hits = {0};
+                    int caret = g_editing && g_editor && g_edit_index != (size_t)-1;
+                    if (caret) {
+                        g_hit = &hits;
+                    }
+                    paint_document_page(mem, i);
+                    g_hit = NULL;
+                    SetGraphicsMode(mem, GM_ADVANCED);
+                    ModifyWorldTransform(mem, NULL, MWT_IDENTITY);
+                    SetGraphicsMode(mem, GM_COMPATIBLE);
+                    RestoreDC(mem, saved);
+                    if (caret) {
+                        g_hit = &hits;
+                        page_caret(mem, i, &p, pw, ph);
+                        g_hit = NULL;
+                    }
+                    free(hits.v);
+                }
             }
         }
     }
@@ -1377,6 +1508,175 @@ static void quick_menu(HWND hwnd, int x, int y) {
     DestroyMenu(m);
 }
 
+/* ======================= caret on the page (0.11.0) ======================= */
+
+/* the current paragraph's caret/selection as UTF-16 indices of its LF text */
+static int caret_range(long *a, long *b) {
+    DWORD s0 = 0, s1 = 0;
+    wchar_t *w;
+    if (!g_text || !(w = text_box_text())) {
+        return 0;
+    }
+    SendMessageW(g_text, EM_GETSEL, (WPARAM)&s0, (LPARAM)&s1);
+    *a = edit_to_lf(w, (long)s0);
+    *b = edit_to_lf(w, (long)s1);
+    free(w);
+    return 1;
+}
+
+static void page_caret(HDC dc, int page, const RECT *p, int pw, int ph) {
+    size_t section = hp_editor_section(g_editor, g_edit_index), k;
+    uint32_t src = source_of_item(g_edit_index);
+    long a, b;
+    double sx = (double)(p->right - p->left) / pw, sy = (double)(p->bottom - p->top) / ph;
+    int drawn = 0;
+    (void)page;
+    if (!caret_range(&a, &b)) {
+        return;
+    }
+    for (k = 0; k < g_hit->n; k++) {
+        const hp_hit *h = &g_hit->v[k];
+        RECT r;
+        if (h->section != section || h->source_p != src) {
+            continue;
+        }
+        r.top = p->top + (int)(h->y0 * sy);
+        r.bottom = p->top + (int)(h->y1 * sy + 0.5);
+        if (b > a) {
+            if ((long)h->ci >= a && (long)h->ci < b && h->len) {
+                r.left = p->left + (int)(h->x0 * sx);
+                r.right = p->left + (int)(h->x1 * sx + 0.5);
+                InvertRect(dc, &r);
+            }
+        } else if (!drawn && ((long)h->ci == a || ((long)(h->ci + h->len) == a && h->len))) {
+            /* caret before this glyph, or after it at the end of a line */
+            int x = p->left + (int)(((long)h->ci == a ? h->x0 : h->x1) * sx);
+            if ((long)h->ci != a && k + 1 < g_hit->n && (long)g_hit->v[k + 1].ci == a &&
+                g_hit->v[k + 1].source_p == src && g_hit->v[k + 1].y0 == h->y0) {
+                continue; /* the next glyph on this line starts there */
+            }
+            r.left = x;
+            r.right = x + (S(2) > 1 ? S(2) : 2);
+            PatBlt(dc, r.left, r.top, r.right - r.left, r.bottom - r.top, DSTINVERT);
+            drawn = 1;
+        }
+    }
+}
+
+/* page coordinates -> paragraph and character (UTF-16 index of its LF text) */
+static int hit_test(int page, double x, double y, size_t *section, uint32_t *src, long *ci) {
+    hp_hit_map hits = {0};
+    HDC dc = CreateCompatibleDC(NULL);
+    HBITMAP bmp, old;
+    int pw, ph, found = 0;
+    size_t k, best = 0;
+    double best_d = 1e18;
+    if (!dc) {
+        return 0;
+    }
+    view_page_size(page, &pw, &ph);
+    bmp = CreateBitmap(pw, ph, 1, 32, NULL);
+    old = (HBITMAP)SelectObject(dc, bmp);
+    g_hit = &hits;
+    paint_document_page(dc, page);
+    g_hit = NULL;
+    SelectObject(dc, old);
+    DeleteObject(bmp);
+    DeleteDC(dc);
+    for (k = 0; k < hits.n; k++) {
+        const hp_hit *h = &hits.v[k];
+        double dy = y < h->y0 ? h->y0 - y : y >= h->y1 ? y - h->y1 + 1 : 0;
+        double dx = x < h->x0 ? h->x0 - x : x > h->x1 ? x - h->x1 : 0;
+        double d = dy * 1000 + dx; /* same line first, then nearest glyph */
+        if (d < best_d) {
+            best_d = d;
+            best = k;
+            found = 1;
+        }
+    }
+    if (found) {
+        const hp_hit *h = &hits.v[best];
+        *section = h->section;
+        *src = h->source_p;
+        *ci = (long)h->ci + (h->len && x > (h->x0 + h->x1) / 2 ? (long)h->len : 0);
+    }
+    free(hits.v);
+    return found;
+}
+
+/* click on the page: open that paragraph in the editor with the caret there */
+static void view_click(int x, int y, int enter) {
+    int i;
+    if (!g_editor || !g_doc) {
+        return;
+    }
+    if (g_editing && g_preview_pending) {
+        preview_build(); /* the page must show the editor's current paragraphs */
+    }
+    for (i = 0; i < g_page_rect_count; i++) {
+        RECT p = g_page_rects[i];
+        OffsetRect(&p, -g_scroll_x, -g_scroll_y);
+        if (x >= p.left && x < p.right && y >= p.top && y < p.bottom) {
+            int pw, ph;
+            size_t section, item;
+            uint32_t src;
+            long ci;
+            view_page_size(i, &pw, &ph);
+            if (!hit_test(i, (double)(x - p.left) * pw / (p.right - p.left), (double)(y - p.top) * ph / (p.bottom - p.top),
+                          &section, &src, &ci)) {
+                return;
+            }
+            item = item_for_source(section, src);
+            if (item == (size_t)-1) {
+                return;
+            }
+            if (!g_editing) {
+                if (!enter) {
+                    return;
+                }
+                editor_mode(1);
+            }
+            if (!editor_commit()) {
+                return;
+            }
+            if (item != g_edit_index) {
+                list_select_item(item);
+            }
+            {
+                /* LF index -> edit control index (each LF is CRLF there) */
+                wchar_t *w = text_box_text();
+                long k = 0, lf = 0;
+                if (w) {
+                    while (w[k] && lf < ci) {
+                        if (w[k] != L'\r') {
+                            lf++;
+                        }
+                        k++;
+                    }
+                    free(w);
+                }
+                SendMessageW(g_text, EM_SETSEL, (WPARAM)k, (LPARAM)k);
+                SendMessageW(g_text, EM_SCROLLCARET, 0, 0);
+            }
+            g_page_index = i;
+            SetFocus(g_text);
+            format_sync();
+            status_refresh();
+            InvalidateRect(g_view, NULL, FALSE);
+            return;
+        }
+    }
+}
+
+/* caret moves in the text box: refresh toolbar state and the page caret */
+static LRESULT CALLBACK TextProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
+    LRESULT r = CallWindowProcW(g_text_proc, h, msg, wp, lp);
+    if (msg == WM_KEYUP || msg == WM_LBUTTONUP || msg == WM_CHAR || (msg == WM_MOUSEMOVE && (wp & MK_LBUTTON))) {
+        PostMessageW(g_main, WM_APP_CARET, 0, 0);
+    }
+    return r;
+}
+
 static LRESULT CALLBACK ViewProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
     case WM_SIZE:
@@ -1407,6 +1707,12 @@ static LRESULT CALLBACK ViewProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         return 0;
     }
     case WM_LBUTTONDOWN:
+        SetFocus(hwnd);
+        view_click((short)LOWORD(lp), (short)HIWORD(lp), 0); /* while editing: move there */
+        return 0;
+    case WM_LBUTTONDBLCLK:
+        view_click((short)LOWORD(lp), (short)HIWORD(lp), 1); /* in page view: start editing there */
+        return 0;
     case WM_RBUTTONDOWN:
         SetFocus(hwnd);
         return 0;
@@ -1545,7 +1851,7 @@ static void format_sync(void) {
     hp_char_format cf;
     hp_para_format pf;
     int ok = g_editor && g_edit_index != (size_t)-1 &&
-             hp_editor_get_format(g_editor, g_edit_index, &cf, &pf) == HP_OK;
+             hp_editor_get_format(g_editor, g_edit_index, &cf, &pf) == HP_OK && current_char_format(&cf);
     static const int align_ids[5] = {IDM_ALIGN_LEFT, IDM_ALIGN_CENTER, IDM_ALIGN_RIGHT, IDM_ALIGN_JUSTIFY,
                                      IDM_ALIGN_DISTRIBUTE};
     static const int fmt_ids[] = {IDM_BOLD, IDM_ITALIC, IDM_UNDERLINE, IDM_STRIKE, IDM_COLOR,
@@ -1656,6 +1962,7 @@ static int preview_build(void) {
     if (!g_editor || !editor_commit()) {
         return 0;
     }
+    g_preview_pending = 0;
     if (!GetTempPathW(MAX_PATH, dir) || !GetTempFileNameW(dir, L"hpe", 0, path)) {
         return 0;
     }
@@ -1681,6 +1988,7 @@ static int preview_build(void) {
 }
 
 static void schedule_preview(int delay_ms) {
+    g_preview_pending = 1;
     if (g_main && g_editing) {
         SetTimer(g_main, TIMER_PREVIEW, (UINT)delay_ms, NULL);
     }
@@ -1712,15 +2020,25 @@ static void format_done(size_t applied, size_t failed) {
 }
 
 static void apply_formats(const hp_char_format *cf, const hp_para_format *pf) {
-    size_t *items, n, i, ok = 0, bad = 0;
+    size_t *items, n, i, ok = 0, bad = 0, a = 0, z = 0;
+    int range;
     if (!format_target_ready()) {
         return;
     }
     n = selected_items(&items);
+    /* a selection inside the text box formats just those characters */
+    range = cf && cf->fields && n == 1 && items[0] == g_edit_index && text_selection_bytes(&a, &z);
     for (i = 0; i < n; i++) {
         int good = 1;
-        if (cf && cf->fields && hp_editor_apply_char_format(g_editor, items[i], cf) != HP_OK) {
-            good = 0;
+        if (cf && cf->fields) {
+            hp_status st = range ? hp_editor_apply_char_format_range(g_editor, items[i], a, z, cf)
+                                 : hp_editor_apply_char_format(g_editor, items[i], cf);
+            if (st == HP_ERR_UNSUPPORTED && range) {
+                status_message(L"표·그림 등 개체가 있는 문단은 문단 전체에만 글자 모양을 줄 수 있습니다.");
+                good = 0;
+            } else if (st != HP_OK) {
+                good = 0;
+            }
         }
         if (pf && pf->fields && hp_editor_apply_para_format(g_editor, items[i], pf) != HP_OK) {
             good = 0;
@@ -1733,13 +2051,15 @@ static void apply_formats(const hp_char_format *cf, const hp_para_format *pf) {
     }
     free(items);
     format_done(ok, bad);
+    if (range && g_text) {
+        SetFocus(g_text);
+    }
 }
 
 /* toggles follow the current paragraph */
 static void toggle_char(unsigned field) {
     hp_char_format cur, cf;
-    if (!format_target_ready() || g_edit_index == (size_t)-1 ||
-        hp_editor_get_format(g_editor, g_edit_index, &cur, NULL) != HP_OK) {
+    if (!format_target_ready() || g_edit_index == (size_t)-1 || !current_char_format(&cur)) {
         return;
     }
     ZeroMemory(&cf, sizeof(cf));
@@ -1769,8 +2089,19 @@ static void set_color(COLORREF c) {
 
 /* relative steps: each paragraph from its own value */
 static void step_format(int size_step, int spacing_step) {
-    size_t *items, n, i, ok = 0, bad = 0;
+    size_t *items, n, i, ok = 0, bad = 0, a = 0, z = 0;
     if (!format_target_ready()) {
+        return;
+    }
+    if (size_step && text_selection_bytes(&a, &z)) {
+        hp_char_format cur, cf;
+        if (hp_editor_get_format_at(g_editor, g_edit_index, a, &cur) == HP_OK) {
+            long v = (long)cur.size_hwp + size_step * 100;
+            ZeroMemory(&cf, sizeof(cf));
+            cf.fields = HP_CF_SIZE;
+            cf.size_hwp = (uint32_t)(v < 100 ? 100 : v > 409600 ? 409600 : v);
+            apply_formats(&cf, NULL);
+        }
         return;
     }
     n = selected_items(&items);
@@ -1814,8 +2145,7 @@ static void pick_color(void) {
     cc.hwndOwner = g_main;
     cc.lpCustColors = custom;
     cc.Flags = CC_FULLOPEN | CC_RGBINIT;
-    if (g_editor && g_edit_index != (size_t)-1 &&
-        hp_editor_get_format(g_editor, g_edit_index, &cur, NULL) == HP_OK) {
+    if (current_char_format(&cur)) {
         cc.rgbResult = RGB((cur.color_rgb >> 16) & 255, (cur.color_rgb >> 8) & 255, cur.color_rgb & 255);
     }
     if (ChooseColorW(&cc)) {
@@ -2174,8 +2504,13 @@ static void char_shape_dialog(void) {
         return;
     }
     ZeroMemory(&s, sizeof(s));
-    if (hp_editor_get_format(g_editor, g_edit_index, &s.start, NULL) != HP_OK) {
-        return;
+    {
+        size_t a = 0, z = 0;
+        hp_status st = text_selection_bytes(&a, &z) ? hp_editor_get_format_at(g_editor, g_edit_index, a, &s.start)
+                                                    : hp_editor_get_format(g_editor, g_edit_index, &s.start, NULL);
+        if (st != HP_OK) {
+            return;
+        }
     }
     dlg_begin(&d, L"글자 모양", 270, 196);
     dlg_item(&d, DLG_STATIC, L"글꼴(&F):", SS_LEFT, 10, 12, 44, 10, (WORD)-1);
@@ -2598,6 +2933,8 @@ static void shortcut_list(void) {
                 L"  미리 보기 F5    문서 닫기 Ctrl+F4    끝 Alt+X\n\n"
                 L"편집\n"
                 L"  본문 편집 F2    문단 추가 Ctrl+Enter\n"
+                L"  쪽 보기에서 더블클릭: 그 자리에서 편집, 편집 중 쪽 클릭: 커서 이동\n"
+                L"  입력창에서 글자를 고른 뒤 서식: 고른 글자에만 적용\n"
                 L"  찾기 Ctrl+F / Ctrl+Q,F    찾아 바꾸기 Ctrl+H / Ctrl+F2 / Ctrl+Q,A\n"
                 L"  다시 찾기 Ctrl+L    거꾸로 찾기 Ctrl+Q,L    찾아가기 Alt+G\n\n"
                 L"보기\n"
@@ -3226,9 +3563,10 @@ static void ui_create(HWND hwnd) {
                                  0, 0, 0, 0, hwnd, (HMENU)(INT_PTR)ID_PARALIST, GetModuleHandleW(NULL), NULL);
     g_text = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"",
                              WS_CHILD | WS_VSCROLL | WS_TABSTOP | ES_MULTILINE | ES_AUTOVSCROLL | ES_WANTRETURN |
-                                 WS_HSCROLL | ES_NOHIDESEL,
+                                 ES_NOHIDESEL, /* no horizontal scroll: long paragraphs wrap */
                              0, 0, 0, 0, hwnd, (HMENU)(INT_PTR)ID_TEXT, GetModuleHandleW(NULL), NULL);
     SendMessageW(g_text, EM_SETLIMITTEXT, 16 * 1024 * 1024, 0);
+    g_text_proc = (WNDPROC)SetWindowLongPtrW(g_text, GWLP_WNDPROC, (LONG_PTR)TextProc);
     g_view = CreateWindowExW(0, L"HangulPadView", L"", WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_HSCROLL | WS_TABSTOP,
                              0, 0, 0, 0, hwnd, (HMENU)(INT_PTR)ID_VIEW, GetModuleHandleW(NULL), NULL);
     if (!g_accel) {
@@ -3320,6 +3658,12 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
     case WM_MOUSEWHEEL:
         if (g_view) {
             return SendMessageW(g_view, msg, wParam, lParam);
+        }
+        return 0;
+    case WM_APP_CARET:
+        format_sync();
+        if (g_view && g_editing) {
+            InvalidateRect(g_view, NULL, FALSE);
         }
         return 0;
     case WM_TIMER:
