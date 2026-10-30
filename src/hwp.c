@@ -514,7 +514,7 @@ static void emit_char_shape(const ctx *c, xb *b, unsigned id, const rec *rc) {
     unsigned faces[7], ratio[7], relsz[7], i;
     int spacing[7], offset[7];
     int32_t height;
-    uint32_t props, text_color, underline_color, shade_color, strike_color = 0;
+    uint32_t props, text_color, underline_color, shade_color, shadow_color, strike_color = 0;
     unsigned border_fill = 0;
     int shadow_x, shadow_y;
     for (i = 0; i < 7; i++) {
@@ -539,7 +539,7 @@ static void emit_char_shape(const ctx *c, xb *b, unsigned id, const rec *rc) {
     text_color = r32(&r);
     underline_color = r32(&r);
     shade_color = r32(&r);
-    (void)r32(&r); /* shadow color */
+    shadow_color = r32(&r);
     if (rleft(&r) && ver_at_least(c, 5, 0, 2, 1)) {
         border_fill = r16(&r);
     }
@@ -593,8 +593,21 @@ static void emit_char_shape(const ctx *c, xb *b, unsigned id, const rec *rc) {
     } else {
         xs(b, "<hh:strikeout shape=\"NONE\" color=\"#000000\"/>");
     }
-    xf(b, "<hh:outline type=\"NONE\"/><hh:shadow type=\"NONE\" color=\"#B2B2B2\" offsetX=\"%d\" offsetY=\"%d\"/>", shadow_x,
-       shadow_y);
+    {
+        /* outline (bits 8-10), shadow (11-12), emboss (13), engrave (14) */
+        static const char *const outlines[] = {"NONE", "SOLID", "DOT", "THICK", "DASH", "DASH_DOT", "DASH_DOT_DOT"};
+        static const char *const shadows[] = {"NONE", "DROP", "CONTINUOUS"};
+        xf(b, "<hh:outline type=\"%s\"/><hh:shadow type=\"%s\" color=\"", PICK(outlines, (props >> 8) & 7),
+           PICK(shadows, (props >> 11) & 3));
+        x_color(b, shadow_color);
+        xf(b, "\" offsetX=\"%d\" offsetY=\"%d\"/>", shadow_x, shadow_y);
+        if (props & (1u << 13)) {
+            xs(b, "<hh:emboss/>");
+        }
+        if (props & (1u << 14)) {
+            xs(b, "<hh:engrave/>");
+        }
+    }
     if (props & (1u << 15)) {
         xs(b, "<hh:supscript/>");
     }
@@ -647,8 +660,11 @@ static void emit_para_shape(const ctx *c, xb *b, unsigned id, const rec *rc) {
     xf(b, "<hh:breakSetting breakLatinWord=\"%s\" breakNonLatinWord=\"%s\" widowOrphan=\"%d\" keepWithNext=\"%d\" "
           "keepLines=\"%d\" pageBreakBefore=\"%d\" lineWrap=\"%s\"/>",
        ((p1 >> 5) & 3) == 0 ? "KEEP_WORD" : ((p1 >> 5) & 3) == 1 ? "HYPHENATION" : "BREAK_WORD",
-       (p1 >> 7) & 1 ? "BREAK_WORD" : "KEEP_WORD", (int)((p1 >> 16) & 1), (int)((p1 >> 17) & 1),
+       (p1 >> 7) & 1 ? "KEEP_WORD" : "BREAK_WORD", /* bit 7 set: 한글 by word (checked against 한글's HWPX) */
+       (int)((p1 >> 16) & 1), (int)((p1 >> 17) & 1),
        (int)((p1 >> 18) & 1), (int)((p1 >> 19) & 1), (p2 & 3) ? "SQUEEZE" : "BREAK");
+    /* element order as in 한글's HWPX: autoSpacing before the margins */
+    xf(b, "<hh:autoSpacing eAsianEng=\"%d\" eAsianNum=\"%d\"/>", (int)((p2 >> 4) & 1), (int)((p2 >> 5) & 1));
     xs(b, "<hp:switch><hp:case hp:required-namespace=\"http://www.hancom.co.kr/hwpml/2016/HwpUnitChar\">");
     for (k = 1; k >= 0; k--) {
         xs(b, "<hh:margin>");
@@ -665,7 +681,7 @@ static void emit_para_shape(const ctx *c, xb *b, unsigned id, const rec *rc) {
     xf(b, "<hh:border borderFillIDRef=\"%u\" offsetLeft=\"%d\" offsetRight=\"%d\" offsetTop=\"%d\" offsetBottom=\"%d\" "
           "connect=\"%d\" ignoreMargin=\"%d\"/>",
        bf_ref(c, border), bl, br, bt, bb, (int)((p1 >> 28) & 1), (int)((p1 >> 29) & 1));
-    xf(b, "<hh:autoSpacing eAsianEng=\"%d\" eAsianNum=\"%d\"/></hh:paraPr>", (int)((p2 >> 4) & 1), (int)((p2 >> 5) & 1));
+    xs(b, "</hh:paraPr>");
 }
 
 /* ---- tab, numbering, bullet and style definitions (0.10.2) ----
@@ -1668,8 +1684,8 @@ static void emit_control(ctx *c, const recs *rs, size_t ci) {
                                           "BOTTOM_RIGHT", "OUTSIDE_TOP", "OUTSIDE_BOTTOM", "INSIDE_TOP", "INSIDE_BOTTOM"};
         uint32_t props = r32(&r);
         unsigned side;
-        rskip(&r, 4);
-        side = r16(&r);
+        rskip(&r, 2 + 2 + 2); /* number, user symbol, leading decoration */
+        side = r16(&r);       /* trailing decoration: 한글 writes it as sideChar */
         xf(c->out, "<hp:ctrl><hp:pageNum pos=\"%s\" formatType=\"DIGIT\" sideChar=\"", PICK(pos, (props >> 8) & 0x0F));
         if (side) {
             x_char(c->out, side);
