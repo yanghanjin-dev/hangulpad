@@ -23,6 +23,7 @@
 
 #include "aes128.h"
 #include "cfb.h"
+#include "hwpx_ns.h"
 #include "hwpx_package.h"
 
 #include <stdarg.h>
@@ -45,7 +46,11 @@ enum {
     TAG_FACE_NAME = 0x13,
     TAG_BORDER_FILL = 0x14,
     TAG_CHAR_SHAPE = 0x15,
+    TAG_TAB_DEF = 0x16,
+    TAG_NUMBERING = 0x17,
+    TAG_BULLET = 0x18,
     TAG_PARA_SHAPE = 0x19,
+    TAG_STYLE = 0x1A,
     TAG_PARA_HEADER = 0x42,
     TAG_PARA_TEXT = 0x43,
     TAG_PARA_CHAR_SHAPE = 0x44,
@@ -663,6 +668,201 @@ static void emit_para_shape(const ctx *c, xb *b, unsigned id, const rec *rc) {
     xf(b, "<hh:autoSpacing eAsianEng=\"%d\" eAsianNum=\"%d\"/></hh:paraPr>", (int)((p2 >> 4) & 1), (int)((p2 >> 5) & 1));
 }
 
+/* ---- tab, numbering, bullet and style definitions (0.10.2) ----
+ * 한글 needs the definitions that paragraph shapes and paragraphs refer to
+ * (tabPrIDRef, heading idRef, styleIDRef). Layouts follow "한글 문서 파일
+ * 구조 5.0" and hwplib's readers; values as in 한글's own HWPX. */
+
+static void emit_tab_def(xb *b, unsigned id, const rec *rc) {
+    static const char *const kinds[] = {"LEFT", "RIGHT", "CENTER", "DECIMAL"};
+    rd r = rd_make(rc->data, rc->size);
+    uint32_t props = r32(&r), n = r32(&r), i;
+    xf(b, "<hh:tabPr id=\"%u\" autoTabLeft=\"%d\" autoTabRight=\"%d\"", id, (int)(props & 1), (int)((props >> 1) & 1));
+    if (!n || !rd_have(&r, 8)) {
+        xs(b, "/>");
+        return;
+    }
+    xs(b, ">");
+    for (i = 0; i < n && rd_have(&r, 8); i++) {
+        uint32_t pos = r32(&r);
+        unsigned kind = r8(&r), fill = r8(&r);
+        rskip(&r, 2);
+        xf(b, "<hp:switch><hp:case hp:required-namespace=\"http://www.hancom.co.kr/hwpml/2016/HwpUnitChar\">"
+              "<hh:tabItem pos=\"%u\" type=\"%s\" leader=\"%s\" unit=\"HWPUNIT\"/></hp:case><hp:default>"
+              "<hh:tabItem pos=\"%u\" type=\"%s\" leader=\"%s\"/></hp:default></hp:switch>",
+           (unsigned)(pos / 2), PICK(kinds, kind), PICK(LINE_TYPE, fill), (unsigned)pos, PICK(kinds, kind),
+           PICK(LINE_TYPE, fill));
+    }
+    xs(b, "</hh:tabPr>");
+}
+
+static const char *num_format(unsigned v) {
+    static const char *const f[] = {"DIGIT", "CIRCLED_DIGIT", "ROMAN_CAPITAL", "ROMAN_SMALL", "LATIN_CAPITAL",
+                                    "LATIN_SMALL", "CIRCLED_LATIN_CAPITAL", "CIRCLED_LATIN_SMALL", "HANGUL_SYLLABLE",
+                                    "CIRCLED_HANGUL_SYLLABLE", "HANGUL_JAMO", "CIRCLED_HANGUL_JAMO", "HANGUL_PHONETIC",
+                                    "IDEOGRAPH", "CIRCLED_IDEOGRAPH", "DECAGON_CIRCLE", "DECAGON_CIRCLE_HANJA"};
+    return PICK(f, v);
+}
+
+/* paragraph head info (12 bytes) as <hh:paraHead ...> attributes */
+static void emit_para_head_attrs(xb *b, rd *r, unsigned level, uint32_t start) {
+    static const char *const aligns[] = {"LEFT", "CENTER", "RIGHT"};
+    uint32_t props = r32(r);
+    unsigned width = r16(r), offset = r16(r);
+    uint32_t char_id = r32(r);
+    xf(b, "<hh:paraHead start=\"%u\" level=\"%u\" align=\"%s\" useInstWidth=\"%d\" autoIndent=\"%d\" "
+          "widthAdjust=\"%d\" textOffsetType=\"%s\" textOffset=\"%d\" numFormat=\"%s\" charPrIDRef=\"%u\" "
+          "checkable=\"0\"",
+       (unsigned)start, level, PICK(aligns, props & 3), (int)((props >> 2) & 1), (int)((props >> 3) & 1),
+       (int)(int16_t)width, (props >> 4) & 1 ? "HWPUNIT" : "PERCENT", (int)(int16_t)offset,
+       num_format((props >> 5) & 0x1F), (unsigned)char_id);
+}
+
+static void emit_numbering(const ctx *c, xb *b, unsigned id, const rec *rc) {
+    /* levels 1-7, start number, level starts 1-7 (5.0.2.5+), then levels
+     * 8-10 and their starts (5.1 documents) */
+    rd r = rd_make(rc->data, rc->size), scan = rd_make(rc->data, rc->size), ext;
+    uint32_t starts[10] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+    unsigned start, level, levels = 7;
+    for (level = 0; level < 7; level++) {
+        rskip(&scan, 12);
+        skip_hwpstr(&scan);
+    }
+    start = r16(&scan);
+    if (rleft(&scan) && ver_at_least(c, 5, 0, 2, 5)) {
+        for (level = 0; level < 7 && rd_have(&scan, 4); level++) {
+            starts[level] = r32(&scan);
+        }
+    }
+    ext = scan;
+    if (rd_have(&scan, 12)) {
+        for (level = 7; level < 10 && rd_have(&scan, 14); level++) {
+            rskip(&scan, 12);
+            skip_hwpstr(&scan);
+        }
+        if (level == 10 && !scan.bad) {
+            levels = 10;
+            for (level = 7; level < 10 && rd_have(&scan, 4); level++) {
+                starts[level] = r32(&scan);
+            }
+        }
+    }
+    xf(b, "<hh:numbering id=\"%u\" start=\"%u\">", id, start);
+    for (level = 0; level < 10; level++) {
+        rd *src = level < 7 ? &r : &ext;
+        unsigned n;
+        if (level >= levels) {
+            break; /* levels 8-10 only when the record has them */
+        }
+        if (!rd_have(src, 12)) {
+            /* a short record: keep the level list complete */
+            xf(b, "<hh:paraHead start=\"1\" level=\"%u\" align=\"LEFT\" useInstWidth=\"0\" autoIndent=\"0\" "
+                  "widthAdjust=\"0\" textOffsetType=\"PERCENT\" textOffset=\"0\" numFormat=\"DIGIT\" "
+                  "charPrIDRef=\"0\" checkable=\"0\"/>",
+               level + 1);
+            continue;
+        }
+        emit_para_head_attrs(b, src, level + 1, starts[level]);
+        {
+            rd peek = *src;
+            n = r16(&peek);
+        }
+        if (!n) {
+            skip_hwpstr(src);
+            xs(b, "/>");
+            continue;
+        }
+        xs(b, ">");
+        x_hwpstr(b, src);
+        xs(b, "</hh:paraHead>");
+    }
+    xs(b, "</hh:numbering>");
+}
+
+static void emit_bullet(xb *b, unsigned id, const rec *rc) {
+    rd r = rd_make(rc->data, rc->size), head = rd_make(rc->data, rc->size);
+    unsigned ch, checked = 0;
+    rskip(&r, 12);
+    ch = r16(&r);
+    if (rd_have(&r, 4 + 5 + 2)) {
+        rskip(&r, 4 + 5);
+        checked = r16(&r);
+    }
+    xf(b, "<hh:bullet id=\"%u\" char=\"", id);
+    if (ch) {
+        x_char(b, ch);
+    }
+    xs(b, "\"");
+    if (checked) {
+        xs(b, " checkedChar=\"");
+        x_char(b, checked);
+        xs(b, "\"");
+    }
+    xs(b, " useImage=\"0\">");
+    emit_para_head_attrs(b, &head, 0, 1);
+    xs(b, "/></hh:bullet>");
+}
+
+static void emit_style(xb *b, unsigned id, const rec *rc) {
+    rd r = rd_make(rc->data, rc->size);
+    unsigned props, next, para, chr;
+    int lang;
+    xf(b, "<hh:style id=\"%u\" type=\"", id);
+    {
+        rd peek = r;
+        skip_hwpstr(&peek);
+        skip_hwpstr(&peek);
+        props = r8(&peek);
+        xs(b, (props & 7) == 1 ? "CHAR" : "PARA");
+    }
+    xs(b, "\" name=\"");
+    x_hwpstr(b, &r);
+    xs(b, "\" engName=\"");
+    x_hwpstr(b, &r);
+    props = r8(&r);
+    next = r8(&r);
+    lang = (int16_t)r16(&r);
+    para = r16(&r);
+    chr = r16(&r);
+    (void)props;
+    xf(b, "\" paraPrIDRef=\"%u\" charPrIDRef=\"%u\" nextStyleIDRef=\"%u\" langID=\"%d\" lockForm=\"0\"/>", para,
+       chr, next, lang);
+}
+
+static unsigned count_tag(const recs *di, unsigned tag) {
+    size_t i;
+    unsigned n = 0;
+    for (i = 0; i < di->n; i++) {
+        if (di->r[i].tag == tag) {
+            n++;
+        }
+    }
+    return n;
+}
+
+/* records of one tag, emitted with consecutive ids starting at `first` */
+static void emit_list(const ctx *c, xb *b, const recs *di, unsigned tag, const char *container, unsigned first) {
+    size_t i;
+    unsigned n = count_tag(di, tag), id = first;
+    if (!n) {
+        return;
+    }
+    xf(b, "<hh:%s itemCnt=\"%u\">", container, n);
+    for (i = 0; i < di->n; i++) {
+        if (di->r[i].tag != tag) {
+            continue;
+        }
+        switch (tag) {
+        case TAG_TAB_DEF: emit_tab_def(b, id, &di->r[i]); break;
+        case TAG_NUMBERING: emit_numbering(c, b, id, &di->r[i]); break;
+        case TAG_BULLET: emit_bullet(b, id, &di->r[i]); break;
+        case TAG_STYLE: emit_style(b, id, &di->r[i]); break;
+        }
+        id++;
+    }
+    xf(b, "</hh:%s>", container);
+}
+
 static hp_status emit_header(ctx *c, const recs *di, unsigned section_count, xb *b) {
     uint32_t counts[18];
     size_t i, face_index = 0;
@@ -726,14 +926,8 @@ static hp_status emit_header(ctx *c, const recs *di, unsigned section_count, xb 
     }
     c->bf_shift = zero_ref;
 
-    xs(b, "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\" ?>"
-          "<hh:head xmlns:ha=\"http://www.hancom.co.kr/hwpml/2011/app\" "
-          "xmlns:hp=\"http://www.hancom.co.kr/hwpml/2011/paragraph\" "
-          "xmlns:hp10=\"http://www.hancom.co.kr/hwpml/2016/paragraph\" "
-          "xmlns:hs=\"http://www.hancom.co.kr/hwpml/2011/section\" "
-          "xmlns:hc=\"http://www.hancom.co.kr/hwpml/2011/core\" "
-          "xmlns:hh=\"http://www.hancom.co.kr/hwpml/2011/head\" ");
-    xf(b, "version=\"1.4\" secCnt=\"%u\"><hh:beginNum page=\"1\" footnote=\"1\" endnote=\"1\" pic=\"1\" tbl=\"1\" "
+    xs(b, HP_XML_DECL "<hh:head" HP_NS_ALL " ");
+    xf(b, "version=\"1.5\" secCnt=\"%u\"><hh:beginNum page=\"1\" footnote=\"1\" endnote=\"1\" pic=\"1\" tbl=\"1\" "
           "equation=\"1\"/><hh:refList>",
        section_count);
 
@@ -762,7 +956,7 @@ static hp_status emit_header(ctx *c, const recs *di, unsigned section_count, xb 
     }
     xs(b, "</hh:fontfaces>");
 
-    xs(b, "<hh:borderFills>");
+    xf(b, "<hh:borderFills itemCnt=\"%u\">", count_tag(di, TAG_BORDER_FILL) + (c->bf_shift ? 1u : 0u));
     if (c->bf_shift) {
         xs(b, "<hh:borderFill id=\"1\" threeD=\"0\" shadow=\"0\" centerLine=\"NONE\" breakCellSeparateLine=\"0\">"
               "<hh:slash type=\"NONE\" Crooked=\"0\" isCounter=\"0\"/><hh:backSlash type=\"NONE\" Crooked=\"0\" isCounter=\"0\"/>"
@@ -778,19 +972,27 @@ static hp_status emit_header(ctx *c, const recs *di, unsigned section_count, xb 
             emit_border_fill(b, bf_ref(c, n_border), &di->r[i]);
         }
     }
-    xs(b, "</hh:borderFills><hh:charProperties>");
+    xf(b, "</hh:borderFills><hh:charProperties itemCnt=\"%u\">", count_tag(di, TAG_CHAR_SHAPE));
     for (i = 0; i < di->n; i++) {
         if (di->r[i].tag == TAG_CHAR_SHAPE) {
             emit_char_shape(c, b, n_char++, &di->r[i]);
         }
     }
-    xs(b, "</hh:charProperties><hh:paraProperties>");
+    xs(b, "</hh:charProperties>");
+    emit_list(c, b, di, TAG_TAB_DEF, "tabProperties", 0);
+    emit_list(c, b, di, TAG_NUMBERING, "numberings", 1);
+    emit_list(c, b, di, TAG_BULLET, "bullets", 1);
+    xf(b, "<hh:paraProperties itemCnt=\"%u\">", count_tag(di, TAG_PARA_SHAPE));
     for (i = 0; i < di->n; i++) {
         if (di->r[i].tag == TAG_PARA_SHAPE) {
             emit_para_shape(c, b, n_para++, &di->r[i]);
         }
     }
-    xs(b, "</hh:paraProperties></hh:refList></hh:head>");
+    xs(b, "</hh:paraProperties>");
+    emit_list(c, b, di, TAG_STYLE, "styles", 0);
+    xs(b, "</hh:refList><hh:compatibleDocument targetProgram=\"HWP201X\"><hh:layoutCompatibility/>"
+          "</hh:compatibleDocument><hh:docOption><hh:linkinfo path=\"\" pageInherit=\"0\" footnoteInherit=\"0\"/>"
+          "</hh:docOption></hh:head>");
     (void)face_index;
     return b->oom ? HP_ERR_NOMEM : HP_OK;
 }
@@ -1754,13 +1956,7 @@ static hp_status emit_section(ctx *c, const recs *rs, xb *b) {
     size_t i;
     c->out = b;
     c->depth = 0;
-    xs(b, "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\" ?>"
-          "<hs:sec xmlns:ha=\"http://www.hancom.co.kr/hwpml/2011/app\" "
-          "xmlns:hp=\"http://www.hancom.co.kr/hwpml/2011/paragraph\" "
-          "xmlns:hp10=\"http://www.hancom.co.kr/hwpml/2016/paragraph\" "
-          "xmlns:hs=\"http://www.hancom.co.kr/hwpml/2011/section\" "
-          "xmlns:hc=\"http://www.hancom.co.kr/hwpml/2011/core\" "
-          "xmlns:hh=\"http://www.hancom.co.kr/hwpml/2011/head\">");
+    xs(b, HP_XML_DECL "<hs:sec" HP_NS_ALL ">");
     /* Top-level paragraphs (level 0). Anything else at level 0 (memo lists,
      * master pages) is not body text. */
     for (i = 0; i < rs->n && !b->oom && c->error == HP_OK;) {
@@ -1999,7 +2195,8 @@ static hp_status add_text_part(hp_package *pkg, const char *name, xb *b) {
     if (b->oom) {
         return HP_ERR_NOMEM;
     }
-    st = hp_package_add_entry(pkg, name, b->s ? b->s : "", b->len, 0);
+    /* 한글 stores version.xml uncompressed, right after mimetype */
+    st = hp_package_add_entry(pkg, name, b->s ? b->s : "", b->len, strcmp(name, "version.xml") == 0);
     free(b->s);
     memset(b, 0, sizeof(*b));
     return st;
@@ -2025,6 +2222,53 @@ hp_status hp_hwp_read(const char *path, hp_document **out_doc) {
     st = hp_hwp_read_memory(file, file_len, out_doc);
     free(file);
     return st;
+}
+
+/* Preview/PrvText.txt (about 1 KB of the text, CRLF lines), placed before
+ * settings.xml as in 한글's packages. */
+static hp_status add_preview_text(hp_document *doc) {
+    hp_package *pkg = doc->package;
+    char *plain = hp_document_plain_text(doc), *text;
+    size_t n = 0, i, at;
+    hp_status st;
+    if (!plain) {
+        return HP_ERR_NOMEM;
+    }
+    text = (char *)malloc(2100);
+    if (!text) {
+        free(plain);
+        return HP_ERR_NOMEM;
+    }
+    for (i = 0; plain[i] && n < 1024; i++) {
+        if (plain[i] == '\n') {
+            text[n++] = '\r';
+        }
+        text[n++] = plain[i];
+    }
+    if (plain[i]) {
+        /* cut on a UTF-8 character boundary */
+        while (n > 0 && ((unsigned char)text[n - 1] & 0xC0) == 0x80) {
+            n--;
+        }
+        if (n > 0 && (unsigned char)text[n - 1] >= 0xC0) {
+            n--;
+        }
+    }
+    free(plain);
+    st = hp_package_add_entry(pkg, "Preview/PrvText.txt", text, n, 0);
+    free(text);
+    if (st != HP_OK) {
+        return st;
+    }
+    for (at = 0; at + 1 < pkg->entry_count; at++) {
+        if (strcmp(pkg->entries[at].name, "settings.xml") == 0) {
+            hp_package_entry e = pkg->entries[pkg->entry_count - 1];
+            memmove(&pkg->entries[at + 1], &pkg->entries[at], (pkg->entry_count - 1 - at) * sizeof(e));
+            pkg->entries[at] = e;
+            break;
+        }
+    }
+    return HP_OK;
 }
 
 hp_status hp_hwp_read_memory(const unsigned char *file, size_t file_len, hp_document **out_doc) {
@@ -2101,19 +2345,12 @@ hp_status hp_hwp_read_memory(const unsigned char *file, size_t file_len, hp_docu
     if (st != HP_OK) {
         goto done;
     }
-    xs(&b, "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\" ?>"
-           "<hv:HCFVersion xmlns:hv=\"http://www.hancom.co.kr/hwpml/2011/version\" tagetApplication=\"WORDPROCESSOR\" "
-           "major=\"5\" minor=\"1\" micro=\"1\" buildNumber=\"0\" os=\"1\" xmlVersion=\"1.4\" application=\"HangulPad\" "
-           "appVersion=\"" HP_VERSION_STRING "\"/>");
+    /* Parts, contents and order as 한글 writes them (0.10.2): a package that
+     * lacks settings.xml, container.rdf or the manifest is reported as damaged. */
+    xs(&b, HP_XML_DECL "<hv:HCFVersion xmlns:hv=\"http://www.hancom.co.kr/hwpml/2011/version\" "
+                       "tagetApplication=\"WORDPROCESSOR\" major=\"5\" minor=\"1\" micro=\"1\" buildNumber=\"0\" "
+                       "os=\"1\" xmlVersion=\"1.5\" application=\"HangulPad\" appVersion=\"" HP_VERSION_COMMAS "\"/>");
     st = add_text_part(pkg, "version.xml", &b);
-    if (st == HP_OK) {
-        xs(&b, "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\" ?>"
-               "<ocf:container xmlns:ocf=\"urn:oasis:names:tc:opendocument:xmlns:container\" "
-               "xmlns:hpf=\"http://www.hancom.co.kr/schema/2011/hpf\"><ocf:rootfiles>"
-               "<ocf:rootfile full-path=\"Contents/content.hpf\" media-type=\"application/hwpml-package+xml\"/>"
-               "</ocf:rootfiles></ocf:container>");
-        st = add_text_part(pkg, "META-INF/container.xml", &b);
-    }
     if (st != HP_OK) {
         goto done;
     }
@@ -2138,13 +2375,16 @@ hp_status hp_hwp_read_memory(const unsigned char *file, size_t file_len, hp_docu
     }
 
     /* content.hpf (manifest + spine) is written as parts are added */
-    xs(&hpf, "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\" ?>"
-             "<opf:package xmlns:opf=\"http://www.idpf.org/2007/opf/\" version=\"\" unique-identifier=\"\" id=\"\">"
-             "<opf:metadata><opf:title>");
+    xs(&hpf, HP_XML_DECL "<opf:package" HP_NS_ALL " version=\"\" unique-identifier=\"\" id=\"\">"
+                         "<opf:metadata><opf:title>");
     if (title) {
         xs(&hpf, title);
     }
-    xs(&hpf, "</opf:title><opf:language>ko</opf:language></opf:metadata><opf:manifest>"
+    xs(&hpf, "</opf:title><opf:language>ko</opf:language>"
+             "<opf:meta name=\"creator\" content=\"text\">HangulPad</opf:meta>"
+             "<opf:meta name=\"subject\" content=\"text\"/><opf:meta name=\"description\" content=\"text\"/>"
+             "<opf:meta name=\"lastsaveby\" content=\"text\">HangulPad</opf:meta>"
+             "<opf:meta name=\"keyword\" content=\"text\"/></opf:metadata><opf:manifest>"
              "<opf:item id=\"header\" href=\"Contents/header.xml\" media-type=\"application/xml\"/>");
 
     /* pictures */
@@ -2220,18 +2460,63 @@ hp_status hp_hwp_read_memory(const unsigned char *file, size_t file_len, hp_docu
             goto done;
         }
     }
-    xs(&hpf, "</opf:manifest><opf:spine><opf:itemref idref=\"header\" linear=\"yes\"/>");
+    xs(&hpf, "<opf:item id=\"settings\" href=\"settings.xml\" media-type=\"application/xml\"/>"
+             "</opf:manifest><opf:spine><opf:itemref idref=\"header\" linear=\"yes\"/>");
     for (i = 0; i < sections; i++) {
         xf(&hpf, "<opf:itemref idref=\"section%u\" linear=\"yes\"/>", (unsigned)i);
     }
     xs(&hpf, "</opf:spine></opf:package>");
-    st = add_text_part(pkg, "Contents/content.hpf", &hpf);
+    xs(&b, HP_XML_DECL "<ha:HWPApplicationSetting xmlns:ha=\"http://www.hancom.co.kr/hwpml/2011/app\" "
+                       "xmlns:config=\"urn:oasis:names:tc:opendocument:xmlns:config:1.0\">"
+                       "<ha:CaretPosition listIDRef=\"0\" paraIDRef=\"0\" pos=\"0\"/></ha:HWPApplicationSetting>");
+    st = add_text_part(pkg, "settings.xml", &b);
+    if (st == HP_OK) {
+        xs(&b, HP_XML_DECL "<rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">"
+                           "<rdf:Description rdf:about=\"\"><ns0:hasPart "
+                           "xmlns:ns0=\"http://www.hancom.co.kr/hwpml/2016/meta/pkg#\" "
+                           "rdf:resource=\"Contents/header.xml\"/></rdf:Description>"
+                           "<rdf:Description rdf:about=\"Contents/header.xml\"><rdf:type "
+                           "rdf:resource=\"http://www.hancom.co.kr/hwpml/2016/meta/pkg#HeaderFile\"/></rdf:Description>");
+        for (i = 0; i < sections; i++) {
+            xf(&b, "<rdf:Description rdf:about=\"\"><ns0:hasPart xmlns:ns0=\"http://www.hancom.co.kr/hwpml/2016/meta/pkg#\" "
+                   "rdf:resource=\"Contents/section%u.xml\"/></rdf:Description>"
+                   "<rdf:Description rdf:about=\"Contents/section%u.xml\"><rdf:type "
+                   "rdf:resource=\"http://www.hancom.co.kr/hwpml/2016/meta/pkg#SectionFile\"/></rdf:Description>",
+               (unsigned)i, (unsigned)i);
+        }
+        xs(&b, "<rdf:Description rdf:about=\"\"><rdf:type "
+               "rdf:resource=\"http://www.hancom.co.kr/hwpml/2016/meta/pkg#Document\"/></rdf:Description></rdf:RDF>");
+        st = add_text_part(pkg, "META-INF/container.rdf", &b);
+    }
+    if (st == HP_OK) {
+        st = add_text_part(pkg, "Contents/content.hpf", &hpf);
+    }
+    if (st == HP_OK) {
+        xs(&b, HP_XML_DECL "<ocf:container xmlns:ocf=\"urn:oasis:names:tc:opendocument:xmlns:container\" "
+                           "xmlns:hpf=\"http://www.hancom.co.kr/schema/2011/hpf\"><ocf:rootfiles>"
+                           "<ocf:rootfile full-path=\"Contents/content.hpf\" media-type=\"application/hwpml-package+xml\"/>"
+                           "<ocf:rootfile full-path=\"Preview/PrvText.txt\" media-type=\"text/plain\"/>"
+                           "<ocf:rootfile full-path=\"META-INF/container.rdf\" media-type=\"application/rdf+xml\"/>"
+                           "</ocf:rootfiles></ocf:container>");
+        st = add_text_part(pkg, "META-INF/container.xml", &b);
+    }
+    if (st == HP_OK) {
+        xs(&b, HP_XML_DECL "<odf:manifest xmlns:odf=\"urn:oasis:names:tc:opendocument:xmlns:manifest:1.0\"/>");
+        st = add_text_part(pkg, "META-INF/manifest.xml", &b);
+    }
     if (st != HP_OK) {
         goto done;
     }
     pkg->read_only = distributed;
     st = hp_hwpx_read_package(pkg, out_doc);
     pkg = NULL; /* owned by the document (or freed) now */
+    if (st == HP_OK) {
+        st = add_preview_text(*out_doc);
+        if (st != HP_OK) {
+            hp_document_free(*out_doc);
+            *out_doc = NULL;
+        }
+    }
 
 done:
     free(b.s);
