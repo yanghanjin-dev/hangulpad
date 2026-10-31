@@ -300,7 +300,7 @@ static const menu_item MENU_ITEMS[] = {
     {M_FILE, IDM_FILE_EXIT, L"끝(&X)\tAlt+X"},
 
     {M_EDIT, IDM_UNDO, L"되돌리기(&U)\tCtrl+Z"},
-    {M_EDIT, IDM_TODO, L"다시 실행(&R)\tCtrl+Shift+Z"},
+    {M_EDIT, IDM_REDO, L"다시 실행(&R)\tCtrl+Shift+Z"},
     {M_EDIT, 0, NULL},
     {M_EDIT, IDM_CUT, L"오려 두기(&T)\tCtrl+X"},
     {M_EDIT, IDM_COPY, L"복사하기(&C)\tCtrl+C"},
@@ -2025,6 +2025,7 @@ static void apply_formats(const hp_char_format *cf, const hp_para_format *pf) {
     if (!format_target_ready()) {
         return;
     }
+    hp_editor_checkpoint(g_editor); /* 0.14.0 */
     n = selected_items(&items);
     /* a selection inside the text box formats just those characters */
     range = cf && cf->fields && n == 1 && items[0] == g_edit_index && text_selection_bytes(&a, &z);
@@ -2104,6 +2105,7 @@ static void step_format(int size_step, int spacing_step) {
         }
         return;
     }
+    hp_editor_checkpoint(g_editor); /* 0.14.0 */
     n = selected_items(&items);
     for (i = 0; i < n; i++) {
         hp_char_format cur, cf;
@@ -3148,6 +3150,7 @@ static int selection_matches(int match_case) {
 
 static size_t replace_all(int match_case) {
     size_t i, total = 0;
+    int checked = 0;
     if (!g_editor || !g_find_what[0] || !editor_commit()) {
         return 0;
     }
@@ -3197,6 +3200,10 @@ static size_t replace_all(int match_case) {
             }
             wmemcpy(out + n, w + pos, rest + 1);
             u = wide_to_utf8(out);
+            if (u && !checked) {
+                hp_editor_checkpoint(g_editor); /* one undo step for the whole replace (0.14.0) */
+                checked = 1;
+            }
             if (u && hp_editor_set(g_editor, i, u) == HP_OK) {
                 total += hits;
             }
@@ -3373,7 +3380,8 @@ static void update_menu_state(HMENU m) {
               {IDM_PAGE_SETUP, has_doc},    {IDM_PRINT, has_doc && g_page_count > 0},
               {IDM_PREVIEW, ed},            {IDM_EDIT_MODE, ed},         {IDM_ADD_PARA, ed && g_editing},
               {IDM_DELETE_PARA, ed && g_editing},
-              {IDM_UNDO, g_editing},        {IDM_CUT, g_editing},        {IDM_PASTE, g_editing},
+              {IDM_UNDO, g_editing},        {IDM_REDO, g_editing && hp_editor_can_redo(g_editor)},
+              {IDM_CUT, g_editing},        {IDM_PASTE, g_editing},
               {IDM_SELECT_ALL, g_editing},  {IDM_FIND, ed},              {IDM_REPLACE, ed},
               {IDM_FIND_NEXT, ed},          {IDM_FIND_PREV, ed},         {IDM_GOTO, has_doc},
               {ID_BTN_PREV, g_page_index > 0},                           {ID_BTN_NEXT, g_page_index + 1 < g_page_count},
@@ -3436,6 +3444,7 @@ static HACCEL build_accelerators(void) {
         {FVIRTKEY, VK_F5, IDM_PREVIEW},
         {FVIRTKEY, VK_F7, IDM_PAGE_SETUP},
         {FVIRTKEY | FCONTROL, 'Z', IDM_UNDO},
+        {FVIRTKEY | FCONTROL | FSHIFT, 'Z', IDM_REDO},
         {FVIRTKEY | FCONTROL, 'X', IDM_CUT},
         {FVIRTKEY | FCONTROL, 'C', IDM_COPY},
         {FVIRTKEY | FCONTROL, 'V', IDM_PASTE},
@@ -3772,12 +3781,21 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
             }
             break;
         case IDM_DELETE_PARA: editor_remove(); break;
+        case IDM_REDO:
+            if (g_editing) {
+                editor_history(0);
+            }
+            break;
         case IDM_UNDO:
         case IDM_CUT:
         case IDM_COPY:
         case IDM_PASTE:
         case IDM_SELECT_ALL: {
             HWND e = focused_edit();
+            if (id == IDM_UNDO && g_editing && (!e || e == g_text)) {
+                editor_history(1); /* the document's history, not just the text box (0.14.0) */
+                break;
+            }
             if (e) {
                 if (id == IDM_UNDO) {
                     SendMessageW(e, EM_UNDO, 0, 0);

@@ -117,6 +117,33 @@ static int ranges(void){
     for(i=0;i<hp_editor_count(again);i++)CHECK(hp_editor_text(again,i)!=NULL);
     hp_editor_free(e);hp_editor_free(again);puts("Range character formats passed");return 0;
 }
+/* 0.14.0: undo / redo over text, paragraphs and formats */
+static int history(void){
+    hp_document *g=hp_document_from_text("첫 문단");hp_editor *e=NULL,*again=NULL;hp_char_format cf,at;size_t added;
+    CHECK(g);CHECK(hp_section_add_paragraph_text(&g->sections[0],"둘째 문단")==HP_OK);
+    CHECK(hp_hwpx_write(g,"tmp/history-src.hwpx")==HP_OK);hp_document_free(g);
+    CHECK(hp_editor_open("tmp/history-src.hwpx",&e)==HP_OK);
+    CHECK(!hp_editor_can_undo(e)&&!hp_editor_can_redo(e)&&hp_editor_undo(e)!=HP_OK);
+    CHECK(hp_editor_checkpoint(e)==HP_OK&&hp_editor_set(e,0,"고친 첫 문단")==HP_OK);
+    CHECK(hp_editor_checkpoint(e)==HP_OK&&hp_editor_insert(e,1,&added)==HP_OK&&hp_editor_set(e,added,"새 문단")==HP_OK);
+    memset(&cf,0,sizeof cf);cf.fields=HP_CF_BOLD;cf.bold=1;
+    CHECK(hp_editor_checkpoint(e)==HP_OK&&hp_editor_apply_char_format(e,0,&cf)==HP_OK);
+    CHECK(hp_editor_checkpoint(e)==HP_OK&&hp_editor_delete(e,1)==HP_OK&&hp_editor_is_deleted(e,1));
+    CHECK(hp_editor_count(e)==3);
+    CHECK(hp_editor_undo(e)==HP_OK&&!hp_editor_is_deleted(e,1));                              /* delete */
+    CHECK(hp_editor_undo(e)==HP_OK&&hp_editor_get_format_at(e,0,1,&at)==HP_OK&&!at.bold);       /* format */
+    CHECK(hp_editor_undo(e)==HP_OK&&hp_editor_count(e)==2);                                    /* insert */
+    CHECK(hp_editor_undo(e)==HP_OK&&!strcmp(hp_editor_text(e,0),"첫 문단")&&!hp_editor_can_undo(e)); /* text */
+    CHECK(hp_editor_redo(e)==HP_OK&&!strcmp(hp_editor_text(e,0),"고친 첫 문단"));
+    CHECK(hp_editor_redo(e)==HP_OK&&hp_editor_count(e)==3&&!strcmp(hp_editor_text(e,added),"새 문단"));
+    CHECK(hp_editor_redo(e)==HP_OK&&hp_editor_get_format_at(e,0,1,&at)==HP_OK&&at.bold&&hp_editor_can_redo(e));
+    CHECK(hp_editor_checkpoint(e)==HP_OK&&!hp_editor_can_redo(e));                            /* a new change drops redo */
+    CHECK(hp_editor_undo(e)==HP_OK&&hp_editor_undo(e)==HP_OK&&hp_editor_undo(e)==HP_OK);
+    CHECK(hp_editor_save(e,"tmp/history-out.hwpx")==HP_OK);
+    CHECK(hp_editor_open("tmp/history-out.hwpx",&again)==HP_OK&&hp_editor_count(again)==2);
+    CHECK(!strcmp(hp_editor_text(again,0),"고친 첫 문단")&&!strcmp(hp_editor_text(again,1),"둘째 문단"));
+    hp_editor_free(again);hp_editor_free(e);puts("Undo/redo of text, paragraphs and formats passed");return 0;
+}
 /* inline elements in the section parts: attributed tabs, full-width / no-break spaces, line breaks */
 static long inline_count(const char *path){
     static const char *const tags[]={"<hp:tab ","<hp:fwSpace","<hp:nbSpace","<hp:lineBreak"};
@@ -181,7 +208,7 @@ int main(int argc,char **argv){
     CHECK(hp_editor_open(out,&again)==HP_OK);CHECK(hp_editor_count(again)==n);
     for(i=0;i<n;i++)if(*hp_editor_text(again,i))CHECK(!strcmp(hp_editor_text(again,i),"표 안과 본문 수정 & 보존"));
     CHECK(hp_editor_save(e,"no-such-directory/out.hwpx")!=HP_OK);
-    hp_editor_free(e);hp_editor_free(again);CHECK(styled()==0);CHECK(ranges()==0);{hp_document *g=hp_document_from_text("글자 모양 시험");CHECK(g);CHECK(hp_section_add_paragraph_text(&g->sections[0],"둘째")==HP_OK);CHECK(hp_hwpx_write(g,"tmp/edit-format-src.hwpx")==HP_OK);hp_document_free(g);}
+    hp_editor_free(e);hp_editor_free(again);CHECK(styled()==0);CHECK(ranges()==0);CHECK(history()==0);{hp_document *g=hp_document_from_text("글자 모양 시험");CHECK(g);CHECK(hp_section_add_paragraph_text(&g->sections[0],"둘째")==HP_OK);CHECK(hp_hwpx_write(g,"tmp/edit-format-src.hwpx")==HP_OK);hp_document_free(g);}
     CHECK(formatting("tmp/edit-format-src.hwpx","tmp/edit-format.hwpx",1)==0);CHECK(formatting("tmp/edit-output.hwpx","tmp/edit-format-t2.hwpx",1)==0);CHECK(formatting("tests/fixtures/table_pagination.hwpx","tmp/edit-format-table.hwpx",2)==0);puts("Text replacement, insert/delete, Unicode, table preservation, repeat save passed");return 0;
 }
 

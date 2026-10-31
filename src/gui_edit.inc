@@ -12,6 +12,7 @@ static int editor_commit(void) {
     GetWindowTextW(g_text,w,n+1);s=wide_to_utf8(w);free(w);if(!s)return 0;
     /* Windows edit controls use CRLF; the engine stores a single LF. */
     {char *a=s,*b=s;for(;*a;a++)if(*a!='\r')*b++=*a;*b=0;}
+    if(strcmp(s,hp_editor_text(g_editor,g_edit_index))!=0)hp_editor_checkpoint(g_editor); /* undo returns here (0.14.0) */
     st=hp_editor_set(g_editor,g_edit_index,s);free(s);
     if(st!=HP_OK){MessageBoxW(g_main,L"편집 내용을 반영하지 못했습니다.",L"한글패드",MB_ICONERROR);return 0;}
     SendMessageW(g_text,EM_SETMODIFY,FALSE,0);return 1;
@@ -95,14 +96,30 @@ static void editor_new(void) {
 }
 static void editor_add(void) {
     hp_status st;size_t added;if(!editor_commit()||g_edit_index==(size_t)-1)return;
+    hp_editor_checkpoint(g_editor);
     st=hp_editor_insert(g_editor,g_edit_index,&added);
     if(st==HP_OK){g_dirty=1;editor_title();editor_list(added);SetFocus(g_text);schedule_preview(250);}
     else MessageBoxW(g_main,L"이 위치에 문단을 추가하지 못했습니다.",L"한글패드",MB_ICONERROR);
 }
 static void editor_remove(void) {
     size_t i=g_edit_index;if(!editor_commit()||i==(size_t)-1)return;
-    if(hp_editor_delete(g_editor,i)!=HP_OK){MessageBoxW(g_main,L"구역·표·그림 등의 개체가 있는 문단과 영역의 마지막 문단은 삭제할 수 없습니다. 문단의 텍스트는 편집할 수 있습니다.",L"한글패드",MB_ICONINFORMATION);return;}
+    if(!hp_editor_can_delete(g_editor,i)){MessageBoxW(g_main,L"구역·표·그림 등의 개체가 있는 문단과 영역의 마지막 문단은 삭제할 수 없습니다. 문단의 텍스트는 편집할 수 있습니다.",L"한글패드",MB_ICONINFORMATION);return;}
+    hp_editor_checkpoint(g_editor);
+    if(hp_editor_delete(g_editor,i)!=HP_OK){hp_editor_undo(g_editor); /* drop the checkpoint */MessageBoxW(g_main,L"구역·표·그림 등의 개체가 있는 문단과 영역의 마지막 문단은 삭제할 수 없습니다. 문단의 텍스트는 편집할 수 있습니다.",L"한글패드",MB_ICONINFORMATION);return;}
     g_dirty=1;editor_title();editor_list(i>0?i-1:0);schedule_preview(250);
+}
+/* Undo (1) or redo (0) a document change: text, paragraphs, formats (0.14.0). */
+static void editor_history(int undo) {
+    size_t keep=g_edit_index,n;
+    if(!g_editor||!editor_commit())return;
+    if(!(undo?hp_editor_can_undo(g_editor):hp_editor_can_redo(g_editor))){
+        status_message(undo?L"되돌릴 작업이 없습니다.":L"다시 실행할 작업이 없습니다.");return;}
+    if((undo?hp_editor_undo(g_editor):hp_editor_redo(g_editor))!=HP_OK){
+        MessageBoxW(g_main,L"메모리가 부족해 되돌리지 못했습니다.",L"한글패드",MB_ICONERROR);return;}
+    n=hp_editor_count(g_editor);
+    if(keep==(size_t)-1||keep>=n)keep=n?n-1:0;
+    g_dirty=1;editor_title();editor_list(keep);schedule_preview(250);format_sync();
+    status_message(undo?L"되돌렸습니다. (다시 실행: Ctrl+Shift+Z)":L"다시 실행했습니다.");
 }
 
 

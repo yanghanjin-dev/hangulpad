@@ -58,14 +58,57 @@ static void escape_seg(buffer *b,const char *s,size_t from,size_t to,const char 
 static void escape(buffer *b,const char *s,const char *qname){escape_seg(b,s,0,strlen(s),qname,NULL);}
 typedef struct {size_t start,end;hp_char_format cf;} span; /* character format on bytes [start,end) of the item text */
 typedef struct {size_t section;hp_xml_node *p;const unsigned char *source;char *original,*text;int deleted,inserted,simple;hp_char_format cf;hp_para_format pf;span *spans;size_t span_count;} item;
+/* Undo history (0.14.0): a state is a copy of the paragraph list. Items only
+ * point into the parsed source XML, which never changes while editing. */
+typedef struct {item *items;size_t count;} snapshot;
+#define HP_UNDO_LIMIT 200
 /* header: Contents/header.xml parsed once (character/paragraph shapes for formatting). */
-struct hp_editor {hp_document *doc;hp_xml_doc **xml;item *items;size_t count;hp_xml_doc *header;const char *header_name;};
+struct hp_editor {hp_document *doc;hp_xml_doc **xml;item *items;size_t count;hp_xml_doc *header;const char *header_name;
+    snapshot *undo,*redo;size_t undo_n,redo_n;};
+static void items_free(item *v,size_t n){size_t i;for(i=0;i<n;i++){free(v[i].text);free(v[i].original);free(v[i].spans);}free(v);}
+static int items_copy(const item *v,size_t n,snapshot *out){
+    size_t i;item *c=calloc(n?n:1,sizeof(*c));out->items=NULL;out->count=0;if(!c)return 0;
+    for(i=0;i<n;i++){
+        c[i]=v[i];c[i].text=copy(v[i].text);c[i].original=copy(v[i].original);c[i].spans=NULL;
+        if(v[i].span_count&&(c[i].spans=malloc(v[i].span_count*sizeof(span)))!=NULL)memcpy(c[i].spans,v[i].spans,v[i].span_count*sizeof(span));
+        if(!c[i].text||!c[i].original||(v[i].span_count&&!c[i].spans)){items_free(c,i+1);return 0;}
+    }
+    out->items=c;out->count=n;return 1;
+}
+static void history_clear(snapshot *v,size_t *n){size_t i;for(i=0;i<*n;i++)items_free(v[i].items,v[i].count);*n=0;}
 size_t hp_editor_count(const hp_editor *e){return e?e->count:0;}
 const char *hp_editor_text(const hp_editor *e,size_t i){return e&&i<e->count?e->items[i].text:"";}
 size_t hp_editor_section(const hp_editor *e,size_t i){return e&&i<e->count?e->items[i].section:0;}
 int hp_editor_is_deleted(const hp_editor *e,size_t i){return e&&i<e->count?e->items[i].deleted:1;}
 int hp_editor_can_delete(const hp_editor *e,size_t i){return e&&i<e->count&&e->items[i].simple;}
-void hp_editor_free(hp_editor *e){size_t i;if(!e)return;for(i=0;i<e->count;i++){free(e->items[i].text);free(e->items[i].original);free(e->items[i].spans);}for(i=0;e->xml&&i<e->doc->section_count;i++)hp_xml_free(e->xml[i]);free(e->xml);hp_xml_free(e->header);free(e->items);hp_document_free(e->doc);free(e);}
+void hp_editor_free(hp_editor *e){size_t i;if(!e)return;for(i=0;i<e->count;i++){free(e->items[i].text);free(e->items[i].original);free(e->items[i].spans);}for(i=0;e->xml&&i<e->doc->section_count;i++)hp_xml_free(e->xml[i]);free(e->xml);hp_xml_free(e->header);free(e->items);
+    history_clear(e->undo,&e->undo_n);history_clear(e->redo,&e->redo_n);free(e->undo);free(e->redo);hp_document_free(e->doc);free(e);}
+
+/* ---- undo / redo (0.14.0) ---- */
+static int history_push(snapshot **v,size_t *n,const item *items,size_t count){
+    snapshot s,*g;
+    if(!items_copy(items,count,&s))return 0;
+    if(*n==HP_UNDO_LIMIT){items_free((*v)[0].items,(*v)[0].count);memmove(*v,*v+1,(*n-1)*sizeof(**v));(*n)--;}
+    g=realloc(*v,(*n+1)*sizeof(*g));if(!g){items_free(s.items,s.count);return 0;}
+    *v=g;(*v)[(*n)++]=s;return 1;
+}
+hp_status hp_editor_checkpoint(hp_editor *e){
+    if(!e)return HP_ERR_INVALID;
+    if(!history_push(&e->undo,&e->undo_n,e->items,e->count))return HP_ERR_NOMEM;
+    history_clear(e->redo,&e->redo_n);return HP_OK;
+}
+int hp_editor_can_undo(const hp_editor *e){return e&&e->undo_n>0;}
+int hp_editor_can_redo(const hp_editor *e){return e&&e->redo_n>0;}
+/* move the newest state of `from` into the editor, the current one onto `to` */
+static hp_status history_step(hp_editor *e,snapshot *from,size_t *from_n,snapshot **to,size_t *to_n){
+    snapshot s;
+    if(!*from_n)return HP_ERR_INVALID;
+    if(!history_push(to,to_n,e->items,e->count))return HP_ERR_NOMEM;
+    s=from[--(*from_n)];
+    items_free(e->items,e->count);e->items=s.items;e->count=s.count;return HP_OK;
+}
+hp_status hp_editor_undo(hp_editor *e){return e?history_step(e,e->undo,&e->undo_n,&e->redo,&e->redo_n):HP_ERR_INVALID;}
+hp_status hp_editor_redo(hp_editor *e){return e?history_step(e,e->redo,&e->redo_n,&e->undo,&e->undo_n):HP_ERR_INVALID;}
 hp_status hp_editor_open(const char *path,hp_editor **out){
     hp_editor *e=calloc(1,sizeof(*e));size_t si;hp_status st;if(!out||!path){free(e);return HP_ERR_INVALID;}*out=NULL;if(!e)return HP_ERR_NOMEM;
     st=hp_document_read(path,&e->doc);if(st!=HP_OK){hp_editor_free(e);return st;}

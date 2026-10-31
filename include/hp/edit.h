@@ -15,6 +15,15 @@ hp_status hp_editor_insert(hp_editor *e, size_t i, size_t *inserted_index);
 hp_status hp_editor_delete(hp_editor *e, size_t i);
 hp_status hp_editor_save(hp_editor *e, const char *path);
 
+/* Undo history (0.14.0). Call hp_editor_checkpoint() before a change (text,
+ * paragraph added/deleted, format); undo returns to that state, redo goes
+ * forward again. A new checkpoint drops the redo states. Up to 200 states. */
+hp_status hp_editor_checkpoint(hp_editor *e);
+int hp_editor_can_undo(const hp_editor *e);
+int hp_editor_can_redo(const hp_editor *e);
+hp_status hp_editor_undo(hp_editor *e);
+hp_status hp_editor_redo(hp_editor *e);
+
 /* Character / paragraph formatting of whole paragraphs (0.10.0).
  * `fields` says which members are meaningful. Sizes and lengths are HWPUNIT
  * (1 pt = 100). Changes are kept per paragraph and written on save as new

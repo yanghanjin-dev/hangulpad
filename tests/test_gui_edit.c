@@ -58,6 +58,24 @@ int main(void){
         CHECK(hp_editor_get_format_at(saved,1,12,&at)==HP_OK&&at.italic);CHECK(hp_editor_get_format_at(saved,1,1,&at)==HP_OK&&!at.italic);
         hp_editor_free(saved);saved=NULL;
     }
+    /* 0.14.0: Ctrl+Z / Ctrl+Shift+Z undo and redo document changes */
+    {   char before[256];wchar_t shown[256];hp_char_format cf;hp_para_format pf;
+        list_select_item(1);snprintf(before,sizeof(before),"%s",hp_editor_text(g_editor,1));
+        SendMessageW(g_text,EM_SETSEL,0,-1);SendMessageW(g_text,EM_REPLACESEL,TRUE,(LPARAM)L"되돌릴 글");
+        SetFocus(g_text);SendMessageW(g_main,WM_COMMAND,IDM_UNDO,0);
+        CHECK(!strcmp(hp_editor_text(g_editor,1),before));
+        GetWindowTextW(g_text,shown,256);{char *u=wide_to_utf8(shown);CHECK(u&&!strcmp(u,before));free(u);}
+        SendMessageW(g_main,WM_COMMAND,IDM_REDO,0);CHECK(!strcmp(hp_editor_text(g_editor,1),"되돌릴 글"));
+        list_select_item(0);SendMessageW(g_main,WM_COMMAND,IDM_UNDERLINE,0);
+        CHECK(hp_editor_get_format(g_editor,0,&cf,&pf)==HP_OK&&cf.underline);
+        SendMessageW(g_main,WM_COMMAND,IDM_ADD_PARA,0);CHECK(hp_editor_count(g_editor)==3);
+        SendMessageW(g_main,WM_COMMAND,IDM_UNDO,0);CHECK(hp_editor_count(g_editor)==2);              /* paragraph */
+        SendMessageW(g_main,WM_COMMAND,IDM_UNDO,0);                                                   /* format */
+        CHECK(hp_editor_get_format(g_editor,0,&cf,&pf)==HP_OK&&!cf.underline&&cf.bold);
+        SendMessageW(g_main,WM_COMMAND,IDM_UNDO,0);CHECK(!strcmp(hp_editor_text(g_editor,1),before));  /* text */
+        SendMessageW(g_main,WM_COMMAND,IDM_REDO,0);CHECK(!strcmp(hp_editor_text(g_editor,1),"되돌릴 글"));
+        CHECK(g_dirty);
+    }
     list_select_item(1);
     editor_remove();CHECK(g_dirty);CHECK(editor_save(0));CHECK(hp_editor_open(utf8,&saved)==HP_OK);CHECK(hp_editor_count(saved)==1);hp_editor_free(saved);
     free(utf8);DeleteFileW(path);DestroyWindow(g_main);puts("Native GUI new/edit/insert/preview/format/range/click/find/replace/zoom/save/reedit/delete passed");return 0;

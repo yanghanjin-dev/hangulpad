@@ -47,6 +47,7 @@
 #define IDM_ADD_PARA 40025
 #define IDM_DELETE_PARA 40026
 #define IDM_UNDO 40027
+#define IDM_REDO 40190 /* 0.14.0 (outside IDM_COLOR_BASE..+7) */
 #define IDM_CUT 40028
 #define IDM_COPY 40029
 #define IDM_PASTE 40030
