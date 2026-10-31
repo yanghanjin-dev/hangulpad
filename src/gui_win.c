@@ -314,8 +314,28 @@ static int selected_font_has_text(HDC dc,const wchar_t *text,int length) {
     return 1;
 }
 
+static void record_font_change(const wchar_t *source,const wchar_t *actual,unsigned code) {
+    int i;
+    for(i=0;i<g_font_change_count;i++)if(g_font_changes[i].code==code &&
+        wcscmp(g_font_changes[i].source,source)==0 && wcscmp(g_font_changes[i].target,actual)==0)break;
+    if(i==g_font_change_count) {
+        if(i<256) {
+            wcsncpy(g_font_changes[i].source,source,LF_FACESIZE-1);
+            wcscpy(g_font_changes[i].target,actual);g_font_changes[i].code=code;g_font_change_count++;
+        } else g_font_changes_truncated=1;
+    }
+}
+
 static int glyph_language(wchar_t c);
+/* changed: set when the run's face was replaced (not installed, or missing the
+ * glyph) by a differently named face; source/actual then name the pair. */
+static HFONT font_for_glyph_ex(HDC dc,const hp_run *run,const wchar_t *text,int length,
+                               int *changed,wchar_t *source_out,wchar_t *actual_out);
 static HFONT font_for_glyph(HDC dc,const hp_run *run,const wchar_t *text,int length) {
+    return font_for_glyph_ex(dc,run,text,length,NULL,NULL,NULL);
+}
+static HFONT font_for_glyph_ex(HDC dc,const hp_run *run,const wchar_t *text,int length,
+                               int *changed,wchar_t *source_out,wchar_t *actual_out) {
     static const wchar_t *candidates[]={L"Malgun Gothic",L"Segoe UI Symbol",L"Segoe UI Emoji",L"Cambria Math",L"Yu Gothic",L"Microsoft YaHei",L"Arial"};
     hp_run styled=*run;
     int lang=glyph_language(text[0]),substituted=0;
@@ -345,17 +365,128 @@ static HFONT font_for_glyph(HDC dc,const hp_run *run,const wchar_t *text,int len
         }
     }
     GetTextFaceW(dc,LF_FACESIZE,actual);
+    if(changed)*changed=0;
     if(substituted && source && source[0] && _wcsicmp(source,actual)!=0) {
-        for(i=0;i<g_font_change_count;i++)if(g_font_changes[i].code==code &&
-            wcscmp(g_font_changes[i].source,source)==0 && wcscmp(g_font_changes[i].target,actual)==0)break;
-        if(i==g_font_change_count) {
-            if(i<256) {
-                wcsncpy(g_font_changes[i].source,source,LF_FACESIZE-1);
-                wcscpy(g_font_changes[i].target,actual);g_font_changes[i].code=code;g_font_change_count++;
-            } else g_font_changes_truncated=1;
+        record_font_change(source,actual,code);
+        if(changed) {
+            *changed=1;
+            wcsncpy(source_out,source,LF_FACESIZE-1);source_out[LF_FACESIZE-1]=0;
+            wcscpy(actual_out,actual);
         }
     }
     free(source);SelectObject(dc,old);return font;
+}
+
+/* Layout measures every glyph several times (paragraph heights, page and table
+ * splits, painting), and creating a GDI font per glyph dominated layout time.
+ * Cache the chosen font per (face, size, style, glyph) and, on display DCs, the
+ * measured advance. Fonts are shared per LOGFONT and live for the process. */
+typedef struct {
+    char face[96]; /* UTF-8 effective face (script face or font_face) */
+    uint32_t size_hwp; unsigned char bold, italic, strikeout, used;
+    wchar_t text[2]; int length;
+    HFONT font; int change; /* index into g_glyph_changes, or -1 */
+    double width; int width_valid;
+} glyph_font;
+static glyph_font *g_glyph_fonts;
+static size_t g_glyph_font_capacity, g_glyph_font_count;
+static struct { LOGFONTW lf; HFONT font; } *g_shared_fonts;
+static int g_shared_font_count, g_shared_font_capacity;
+static struct { wchar_t source[LF_FACESIZE], actual[LF_FACESIZE]; } *g_glyph_changes;
+static int g_glyph_change_count, g_glyph_change_capacity;
+
+static unsigned glyph_code(const wchar_t *text,int length) {
+    if(length==2 && text[0]>=0xd800 && text[0]<=0xdbff && text[1]>=0xdc00 && text[1]<=0xdfff)
+        return 0x10000+((text[0]-0xd800)<<10)+(text[1]-0xdc00);
+    return (unsigned)text[0];
+}
+/* Key fields of a lookup, laid out like the entry so one hash serves both. */
+static void glyph_font_key(glyph_font *key,const char *face,const hp_run *run,const wchar_t *text,int length) {
+    strcpy(key->face,face);key->size_hwp=run->font_size_hwp;
+    key->bold=(unsigned char)run->bold;key->italic=(unsigned char)run->italic;key->strikeout=(unsigned char)run->strikeout;
+    key->text[0]=text[0];key->text[1]=length==2 ? text[1] : 0;key->length=length;
+}
+static size_t glyph_font_hash(const glyph_font *key) {
+    uint64_t h=1469598103934665603ull; const unsigned char *p=(const unsigned char *)key->face;
+    while(*p){h^=*p++;h*=1099511628211ull;}
+    h^=key->size_hwp;h*=1099511628211ull;
+    h^=(unsigned)(key->bold|key->italic<<1|key->strikeout<<2);h*=1099511628211ull;
+    h^=key->text[0];h*=1099511628211ull;
+    h^=key->text[1];h*=1099511628211ull;
+    return (size_t)h;
+}
+static int glyph_font_matches(const glyph_font *e,const glyph_font *key) {
+    return e->size_hwp==key->size_hwp && e->bold==key->bold && e->italic==key->italic &&
+        e->strikeout==key->strikeout && e->length==key->length && e->text[0]==key->text[0] &&
+        e->text[1]==key->text[1] && strcmp(e->face,key->face)==0;
+}
+static glyph_font *glyph_font_slot(glyph_font *table,size_t capacity,const glyph_font *key) {
+    size_t mask=capacity-1,i=glyph_font_hash(key)&mask;
+    while(table[i].used && !glyph_font_matches(&table[i],key))i=(i+1)&mask;
+    return &table[i];
+}
+static int glyph_font_grow(void) {
+    size_t capacity=g_glyph_font_capacity ? g_glyph_font_capacity*2 : 4096,i;
+    glyph_font *table=calloc(capacity,sizeof(*table));
+    if(!table)return 0;
+    for(i=0;i<g_glyph_font_capacity;i++)if(g_glyph_fonts[i].used)
+        *glyph_font_slot(table,capacity,&g_glyph_fonts[i])=g_glyph_fonts[i];
+    free(g_glyph_fonts);g_glyph_fonts=table;g_glyph_font_capacity=capacity;
+    return 1;
+}
+static HFONT shared_font(HFONT font) {
+    LOGFONTW lf;int i;
+    if(!GetObjectW(font,sizeof(lf),&lf))return font;
+    for(i=0;i<g_shared_font_count;i++)if(memcmp(&lf,&g_shared_fonts[i].lf,sizeof(lf))==0) {
+        DeleteObject(font);return g_shared_fonts[i].font;
+    }
+    if(g_shared_font_count==g_shared_font_capacity) {
+        int capacity=g_shared_font_capacity ? g_shared_font_capacity*2 : 64;
+        void *grown=realloc(g_shared_fonts,(size_t)capacity*sizeof(*g_shared_fonts));
+        if(!grown)return font; /* kept by its glyph entry alone */
+        g_shared_fonts=grown;g_shared_font_capacity=capacity;
+    }
+    g_shared_fonts[g_shared_font_count].lf=lf;g_shared_fonts[g_shared_font_count].font=font;
+    return g_shared_fonts[g_shared_font_count++].font;
+}
+/* Borrowed: the caller selects the font but never deletes it. NULL = not cached. */
+static glyph_font *glyph_font_get(HDC dc,const hp_run *run,const wchar_t *text,int length) {
+    const char *face=run->script_faces[glyph_language(text[0])];
+    glyph_font key,*e;HFONT font;int changed=0;wchar_t source[LF_FACESIZE],actual[LF_FACESIZE];
+    if(!face[0])face=run->font_face ? run->font_face : "";
+    if(strlen(face)>=sizeof(key.face) || length<1 || length>2)return NULL;
+    if((g_glyph_font_count+1)*2>g_glyph_font_capacity && !glyph_font_grow())return NULL;
+    memset(&key,0,sizeof(key));glyph_font_key(&key,face,run,text,length);
+    e=glyph_font_slot(g_glyph_fonts,g_glyph_font_capacity,&key);
+    if(e->used) {
+        if(e->change>=0)record_font_change(g_glyph_changes[e->change].source,g_glyph_changes[e->change].actual,glyph_code(text,length));
+        return e;
+    }
+    font=font_for_glyph_ex(dc,run,text,length,&changed,source,actual);
+    if(!font)return NULL;
+    font=shared_font(font);
+    *e=key;e->font=font;e->change=-1;e->used=1;g_glyph_font_count++;
+    if(changed) {
+        int i;
+        for(i=0;i<g_glyph_change_count;i++)if(wcscmp(g_glyph_changes[i].source,source)==0 && wcscmp(g_glyph_changes[i].actual,actual)==0)break;
+        if(i==g_glyph_change_count && g_glyph_change_count==g_glyph_change_capacity) {
+            int capacity=g_glyph_change_capacity ? g_glyph_change_capacity*2 : 16;
+            void *grown=realloc(g_glyph_changes,(size_t)capacity*sizeof(*g_glyph_changes));
+            if(grown){g_glyph_changes=grown;g_glyph_change_capacity=capacity;}
+        }
+        if(i<g_glyph_change_capacity) {
+            if(i==g_glyph_change_count) {
+                wcscpy(g_glyph_changes[i].source,source);wcscpy(g_glyph_changes[i].actual,actual);g_glyph_change_count++;
+            }
+            e->change=i;
+        }
+    }
+    return e;
+}
+/* Advances are cached only for the 96-dpi display/bitmap measurement DCs;
+ * printer and scaled preview DCs keep measuring through their own mapping. */
+static int glyph_width_cacheable(HDC dc) {
+    return GetDeviceCaps(dc,TECHNOLOGY)==DT_RASDISPLAY && GetMapMode(dc)==MM_TEXT;
 }
 
 static void rebuild_flat(void) {
@@ -1376,17 +1507,25 @@ static double glyph_step(HDC hdc, const hp_run *run, const wchar_t *text, int le
         }
         return width;
     }
-    HFONT font = font_for_glyph(hdc, run, text, length), old = (HFONT)SelectObject(hdc, font);
-    SIZE size;
+    glyph_font *cached = glyph_font_get(hdc, run, text, length);
+    HFONT font = cached ? cached->font : font_for_glyph(hdc, run, text, length), old = NULL;
     int lang = glyph_language(text[0]);
     int ratio = run->width_percent[lang] > 0 ? run->width_percent[lang] : 100;
+    int cacheable = cached && glyph_width_cacheable(hdc);
+    int half_em_space = text[0]==' ' && !run->use_font_space;
     double em=(run->font_size_hwp ? run->font_size_hwp : 1000)/75.0;
     double advance,base_width;
-    GetTextExtentPoint32W(hdc, text, length, &size);
-    base_width=size.cx/(double)FONT_SCALE;
-    if(text[0]==' ' && !run->use_font_space)base_width=em/2;
-    else if(run->bold && selected_synthetic_bold(hdc)) {
-        base_width=regular_advance(hdc,font,text,length,base_width);
+    /* A known advance needs no font selection unless the glyph is drawn. */
+    if(draw || !(half_em_space || (cacheable && cached->width_valid)))old=(HFONT)SelectObject(hdc, font);
+    if(half_em_space)base_width=em/2;
+    else if(cacheable && cached->width_valid)base_width=cached->width;
+    else {
+        SIZE size;
+        GetTextExtentPoint32W(hdc, text, length, &size);
+        base_width=size.cx/(double)FONT_SCALE;
+        if(run->bold && selected_synthetic_bold(hdc))
+            base_width=regular_advance(hdc,font,text,length,base_width);
+        if(cacheable){cached->width=base_width;cached->width_valid=1;}
     }
     /* HWP spacing is a percentage of this glyph's advance, including half-em
      * spaces and narrow Latin punctuation, rather than a percentage of em. */
@@ -1402,8 +1541,8 @@ static double glyph_step(HDC hdc, const hp_run *run, const wchar_t *text, int le
         TextOutW(hdc, 0, 0, text, length);
         RestoreDC(hdc, saved);
     }
-    SelectObject(hdc, old);
-    DeleteObject(font);
+    if(old)SelectObject(hdc, old);
+    if(!cached)DeleteObject(font);
     return advance > 0 ? advance : 1;
 }
 static int glyph_length(const wchar_t *text, size_t i, size_t end) {
@@ -1596,11 +1735,12 @@ static int layout_saved_para(HDC hdc, const hp_paragraph *para, int left, int ri
                 if(all[ci]!='\n' && all[ci]!='\r') {
                     int glyph_y=base+top,baseline=0;double glyph_x=x;
                     if(seg->baseline_hwp || (run && run->underline)) {
-                        HFONT gf=font_for_glyph(hdc,run ? run : &fallback,all+ci,len),old=(HFONT)SelectObject(hdc,gf);
+                        glyph_font *cf=glyph_font_get(hdc,run ? run : &fallback,all+ci,len);
+                        HFONT gf=cf ? cf->font : font_for_glyph(hdc,run ? run : &fallback,all+ci,len),old=(HFONT)SelectObject(hdc,gf);
                         TEXTMETRICW tm;GetTextMetricsW(hdc,&tm);
                         if(seg->baseline_hwp)glyph_y+=hp_line_px(seg->baseline_hwp)-(tm.tmAscent+FONT_SCALE/2)/FONT_SCALE;
                         baseline=glyph_y+(tm.tmAscent+FONT_SCALE/2)/FONT_SCALE;
-                        SelectObject(hdc,old);DeleteObject(gf);
+                        SelectObject(hdc,old);if(!cf)DeleteObject(gf);
                     }
                     if(ci==right_tab && run){hp_run tab=*run;
                         tab.tab_width_hwp=(uint32_t)(tab.tab_width_hwp+tab_adjust*75.0+0.5);
