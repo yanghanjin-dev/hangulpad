@@ -33,7 +33,7 @@
       "pages": 4,
       "fallback_cuts": 0,
       "images": {
-        "mfds-001.png": "8ac238fb21c8e5c44dd0a5c1b974908fad0df9baa4d0e9294cd62d9fa72c3f88",
+        "mfds-001.png": "b9504c57ef96d1f6af06c96c9856777488702acd3463fae62468075cc2d92ef4",
         "mfds-003.png": "6def2fd691dca3bd9d78a21462409020c7e4c8763e18af879c3ab886acbbea0a",
         "mfds-004.png": "84e5d8b3f39adddded9bd5a4773883d9a5dcea66803d24d8aa93c5b6c9893a2e"
       }
@@ -43,8 +43,8 @@
       "pages": 2,
       "fallback_cuts": 0,
       "images": {
-        "merged-001.png": "1deece2833ef97f048ea23b0443fc2e11163361e3f0d051e93fabd68c0e8f86b",
-        "merged-002.png": "79a71181deb2216c730b8d52e42986c1d642ce750f196da5830bfa09448a9375"
+        "merged-001.png": "8f7caec115e5c0097a7ebf5b9230d6e7bf57e8aa5eb99a72ddc192c8a73d153b",
+        "merged-002.png": "10b35222af7d4e250eecc3885aa14bb508e6da958485d9a24aa64dc2a04cb4fe"
       }
     }
   }

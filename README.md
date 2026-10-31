@@ -7,7 +7,7 @@ A lightweight Korean word processor with a C11 HWP/HWPX engine and a Windows vie
 
 > **기본 개발 환경:** Windows PowerShell / MSYS2 UCRT64 / CMake / Ninja.
 
-**현재 버전: 0.13.0** (2026-10-31) — 변경 내역은 [`CHANGELOG.md`](CHANGELOG.md)
+**현재 버전: 0.13.1** (2026-10-31) — 변경 내역은 [`CHANGELOG.md`](CHANGELOG.md)
 
 0.13.0은 **HWPML(한/글 XML, 국가법령정보센터 법령 파일 등)**을 열고, 미주를 문서 끝에, 머리말·꼬리말·각주 안의 표·그림과 위첨자·아래첨자를 표시합니다.
 

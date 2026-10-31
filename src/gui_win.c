@@ -612,7 +612,7 @@ static int cell_tail_spacing(HDC dc,const hp_table_cell *cell,int width) {
     for(i=0;i<ink.count;i++)if(ink.bands[i].bottom>ink_bottom)ink_bottom=ink.bands[i].bottom;
     free(ink.bands);
     if(trim>full-ink_bottom)trim=full-ink_bottom;
-    return trim;
+    return trim>0 ? trim : 0; /* ink below the line box must not grow the cell */
 }
 static int cell_content_height(HDC hdc,const hp_table_cell *cell,int inner) {
     int content=0;size_t pi;
@@ -1509,6 +1509,9 @@ static int layout_saved_para(HDC hdc, const hp_paragraph *para, int left, int ri
     while(group<para->seg_count) {
         size_t last=group,si,stream,end_group;
         int reflow=0,group_base=bottom,top=group_base;
+        /* lines past the saved ones: positions summed in HWPUNIT and rounded
+         * once, as saved positions are (per-line rounding added up; 0.13.1) */
+        int64_t next_hwp=0;
         int32_t source_origin=(int32_t)para->segs[group].vertpos_hwp;
         while(last+1<para->seg_count && (int32_t)para->segs[last+1].vertpos_hwp >= (int32_t)para->segs[last].vertpos_hwp)last++;
         stream=para->segs[group].textpos;
@@ -1543,8 +1546,11 @@ static int layout_saved_para(HDC hdc, const hp_paragraph *para, int left, int ri
             if(pitch<1)pitch=1;
             if(end>text_length)end=text_length;
             if(start>end)start=end;
-            if(si<=last)top=group_base+hp_line_px((int32_t)seg->vertpos_hwp-source_origin);
-            else top=bottom;
+            if(si<=last) {
+                top=group_base+hp_line_px((int32_t)seg->vertpos_hwp-source_origin);
+                next_hwp=(int32_t)seg->vertpos_hwp-source_origin;
+            } else top=group_base+hp_line_px((int32_t)next_hwp);
+            next_hwp+=(int64_t)hp_line_height(seg);
             finish=start;
             while(finish<end) {
                 const hp_run *run=run_at_char(para,finish,NULL);
@@ -1555,7 +1561,12 @@ static int layout_saved_para(HDC hdc, const hp_paragraph *para, int left, int ri
                     finish++;break;
                 }
                 advance=glyph_step(hdc,run ? run : &fallback,all+finish,len,0,0,0);
-                if(reflow && finish>start && width+advance>available)break;
+                /* GDI advances differ from 한글's by rounding: a line 한글 fills
+                 * exactly may measure a fraction wider here, so allow 0.5%
+                 * (justification then takes the excess back; 0.13.1) */
+                /* spaces at the end of a line hang past it, as in 한글, instead of
+                 * starting the next line */
+                if(reflow && finish>start && all[finish]!=' ' && width+advance>available+(available>200 ? available*0.005 : 1.0))break;
                 width+=advance;finish+=(size_t)len;
             }
             width=span_width(hdc,para,all,start,finish);
@@ -1605,7 +1616,9 @@ static int layout_saved_para(HDC hdc, const hp_paragraph *para, int left, int ri
                 int ink_top=0,ink_height=text_ink_height(hdc,para,all,start,finish,hp_line_px(seg->baseline_hwp),&ink_top);
                 hp_cut_add(ink,ink_origin+top+ink_top,ink_origin+top+ink_top+ink_height);
             }
-            if(top+pitch>bottom)bottom=top+pitch;
+            if(si<=last) {
+                if(top+pitch>bottom)bottom=top+pitch;
+            } else if(group_base+hp_line_px((int32_t)next_hwp)>bottom)bottom=group_base+hp_line_px((int32_t)next_hwp);
             if(breaks && line_count<capacity)breaks[line_count]=bottom;
             line_count++;stream=finish;si++;
         } while(reflow ? stream<end_group : si<=last);
@@ -1631,6 +1644,9 @@ static int layout_text_para(HDC hdc, const hp_paragraph *para, int left, int rig
      * than the source (0.10.1). */
     line.vertsize_hwp=line.textheight_hwp=relaid_line_size_hwp(para);
     line.spacing_hwp=relaid_line_spacing_hwp(para);
+    /* 한글's baseline is 85% down the text height; without one the glyphs sat
+     * at the top and their descent left the line box (0.13.1) */
+    line.baseline_hwp=line.textheight_hwp*85/100;
     line.horzpos_hwp=0; /* paragraph indentation is applied by saved_line_box */
     copy=*para;copy.segs=&line;copy.seg_count=1;
     return layout_saved_para(hdc,&copy,left,right,base,draw,ends,capacity,hard,ink,ink_origin);
